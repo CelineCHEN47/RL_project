@@ -76,24 +76,51 @@ class TagEnvironment:
     def compute_reward(self, entity: Entity, tag_event: dict | None) -> float:
         """Compute reward for a single entity this frame.
 
-        Reward design (placeholder - teammates should tune):
+        Reward design:
             Tagger:
-                +10.0 for successful tag
-                -0.01 per step (encourages fast tagging)
+                +20.0  for successful tag
+                -0.05  per step (pressure to tag quickly)
+                +distance_reward: gets closer to nearest runner = positive
             Runner:
-                -10.0 for being tagged
-                +0.01 per step survived
+                -20.0  for being tagged
+                +0.05  per step survived
+                +distance_reward: gets farther from tagger = positive
         """
         reward = 0.0
 
         if entity.is_tagger:
-            reward -= 0.01  # time penalty
+            # --- Tagger rewards ---
+            reward -= 0.05  # time penalty
+
             if tag_event and tag_event.get("tagger_id") == entity.entity_id:
-                reward += 10.0  # successful tag
+                reward += 20.0  # successful tag
+            else:
+                # Distance shaping: reward getting closer to nearest runner
+                min_dist = float("inf")
+                for other in self.entities:
+                    if other.entity_id == entity.entity_id:
+                        continue
+                    if not other.is_tagger:
+                        d = entity.distance_to(other)
+                        min_dist = min(min_dist, d)
+                if min_dist < float("inf"):
+                    # Closer = higher reward (max ~0.5 when very close)
+                    max_dist = max(self.level_w, self.level_h)
+                    reward += 0.5 * (1.0 - min_dist / max_dist)
         else:
-            reward += 0.01  # survival bonus
+            # --- Runner rewards ---
+            reward += 0.05  # survival bonus
+
             if tag_event and tag_event.get("tagged_id") == entity.entity_id:
-                reward -= 10.0  # got tagged
+                reward -= 20.0  # got tagged
+            else:
+                # Distance shaping: reward being far from tagger
+                for other in self.entities:
+                    if other.is_tagger:
+                        d = entity.distance_to(other)
+                        max_dist = max(self.level_w, self.level_h)
+                        reward += 0.3 * (d / max_dist)  # farther = better
+                        break
 
         return reward
 

@@ -1,6 +1,7 @@
 """Core game loop and state machine."""
 
 import sys
+import random
 import importlib
 import pygame
 import config
@@ -98,10 +99,11 @@ class GameManager:
         algo_class = getattr(module, algo_class_name)
 
         spawn_points = list(self.level.spawn_points)
+        random.shuffle(spawn_points)
         entity_id = 0
 
         if self.mode == config.GameMode.PLAYER_MODE:
-            # First spawn is the player
+            # Random spawn for the player
             if spawn_points:
                 px, py = spawn_points.pop(0)
                 self.player = Player(px, py, entity_id)
@@ -129,10 +131,11 @@ class GameManager:
         for cp in self.level.crate_spawns:
             self.movable_objects.append(MovableObject(cp[0], cp[1]))
 
-        # Initialize tag logic (first entity is tagger)
+        # Random tagger
         self.tag_logic = TagLogic(self.entities)
         if self.entities:
-            self.tag_logic.set_tagger(self.entities[0].entity_id)
+            tagger = random.choice(self.entities)
+            self.tag_logic.set_tagger(tagger.entity_id)
 
         # Initialize RL environment
         self.rl_env = TagEnvironment(self.level, self.entities,
