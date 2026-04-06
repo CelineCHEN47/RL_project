@@ -27,22 +27,65 @@ python main.py
 ## Game Modes
 
 ### Player Mode
-You control one character. The other characters are RL agents using the algorithm you selected. Move around and try to tag (or avoid being tagged by) the AI agents. Once RL is implemented, agents will learn in real-time as you play.
+You control one character. The other characters are RL agents using the algorithm you selected.
 
 ### Simulation Mode
-All characters are RL agents. You watch as they interact and learn. Currently agents are stationary (placeholder) until RL algorithms are implemented.
+All characters are RL agents. You watch as they interact.
+
+### Agent Behavior (Train Mode)
+For both modes, you choose how the agents behave:
+
+| Option | Description |
+|--------|-------------|
+| **Train Live** | Agents learn in real-time as the game runs. Early behavior is random, improves over time. |
+| **Use Trained** | Agents load a pre-trained model (no learning during play). Train offline with `train.py` first. |
+
+## Training Models Offline
+
+Use `train.py` to train models much faster than real-time (headless, no rendering):
+
+```bash
+# Train PPO for 200 rounds with 2 parallel simulations
+python train.py --algorithm PPO --rounds 200 --sims 2
+
+# Train with more steps per round for longer episodes
+python train.py -a PPO -r 500 -s 2000 -n 4
+
+# Resume training from a saved model
+python train.py -a PPO -r 100 --load saved_models/ppo_model.pt
+
+# List all available algorithms
+python train.py --list-algorithms
+```
+
+### Training Script Parameters
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--algorithm` | `-a` | PPO | Algorithm to train |
+| `--rounds` | `-r` | 100 | Number of training rounds (episodes) |
+| `--steps-per-round` | `-s` | 1000 | Game steps per round |
+| `--sims` | `-n` | 1 | Number of parallel simulations (shared model) |
+| `--save-dir` | `-d` | saved_models | Directory for model files |
+| `--load` | `-l` | None | Path to load existing model before training |
+| `--log-interval` | | 5 | Print progress every N rounds |
+| `--save-interval` | | 20 | Save checkpoint every N rounds |
+
+Models are saved to `saved_models/<algorithm>_model.pt`. The game menu automatically detects available trained models.
 
 ## Project Structure
 
 ```
 RL_project/
-├── main.py                    # Entry point - run this to start
+├── main.py                    # Entry point - run this to start the game
+├── train.py                   # Universal training script (CLI)
 ├── config.py                  # All game constants, colors, enums
 ├── requirements.txt           # Python dependencies
 │
 ├── game/                      # Core game logic
 │   ├── game_manager.py        # Main game loop, state machine (MENU/PLAYING)
-│   └── tag_logic.py           # Tag rules: who is "it", cooldowns, tag detection
+│   ├── tag_logic.py           # Tag rules: who is "it", cooldowns, tag detection
+│   └── simulation.py          # Headless simulation for fast offline training
 │
 ├── entities/                  # Game characters and objects
 │   ├── entity.py              # Base Entity class (position, velocity, collision rect)

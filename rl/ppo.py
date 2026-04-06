@@ -6,9 +6,13 @@ Architecture:
     - Uses GAE (Generalized Advantage Estimation) for variance reduction
     - Clipped surrogate objective to keep updates stable
 
-Observation is flattened to a fixed-size vector:
-    [self_pos(2), self_vel(2), is_tagger(1), tagger_pos(2),
-     agent_0_pos(2), agent_0_is_tagger(1), ..., agent_N_pos(2), agent_N_is_tagger(1)]
+Ego-centric observation vector (fixed-size):
+    [self_pos(2), self_vel(2), is_tagger(1),
+     tagger_rel(2), tagger_dist(1),
+     nearest_runner_rel(2), nearest_runner_dist(1),
+     wall_rays(8),
+     agent_0_rel(2), agent_0_dist(1), agent_0_is_tagger(1), ...,
+     agent_N_rel(2), agent_N_dist(1), agent_N_is_tagger(1)]
     Padded to MAX_OTHER_AGENTS slots.
 """
 
@@ -23,7 +27,12 @@ from rl.base_algorithm import BaseRLAlgorithm
 
 # --- Hyperparameters ---
 MAX_OTHER_AGENTS = 6
-OBS_DIM = 2 + 2 + 1 + 2 + MAX_OTHER_AGENTS * 3  # = 25
+# Obs: self_pos(2) + self_vel(2) + is_tagger(1)
+#      + tagger_rel(2) + tagger_dist(1)
+#      + nearest_runner_rel(2) + nearest_runner_dist(1)
+#      + wall_rays(8)
+#      + agents(MAX_OTHER_AGENTS * 4: rel_x, rel_y, dist, is_tagger)
+OBS_DIM = 2 + 2 + 1 + 2 + 1 + 2 + 1 + 8 + MAX_OTHER_AGENTS * 4  # = 43
 HIDDEN_DIM = 128
 LEARNING_RATE = 3e-4
 GAMMA = 0.99
@@ -42,20 +51,17 @@ class ActorCritic(nn.Module):
 
     def __init__(self, obs_dim: int, action_dim: int, hidden: int):
         super().__init__()
-        # Shared feature extractor
         self.shared = nn.Sequential(
             nn.Linear(obs_dim, hidden),
             nn.ReLU(),
             nn.Linear(hidden, hidden),
             nn.ReLU(),
         )
-        # Actor head (policy logits)
         self.actor = nn.Sequential(
             nn.Linear(hidden, hidden // 2),
             nn.ReLU(),
             nn.Linear(hidden // 2, action_dim),
         )
-        # Critic head (state value)
         self.critic = nn.Sequential(
             nn.Linear(hidden, hidden // 2),
             nn.ReLU(),
@@ -162,27 +168,39 @@ class PPO(BaseRLAlgorithm):
         self.total_steps = 0
 
     def _obs_to_tensor(self, obs: dict) -> torch.Tensor:
-        """Convert observation dict to fixed-size tensor."""
+        """Convert ego-centric observation dict to fixed-size tensor."""
         features = []
 
-        # Self position (2)
+        # Self position (2) - absolute, for spatial awareness
         features.extend(obs["self_pos"])
-        # Self velocity (2) - normalize by speed
+
+        # Self velocity (2) - normalized by speed
         features.append(obs["self_vel"][0] / 3.0)
         features.append(obs["self_vel"][1] / 3.0)
+
         # Is tagger (1)
         features.append(1.0 if obs["is_tagger"] else 0.0)
-        # Tagger position (2)
-        features.extend(obs["tagger_pos"])
 
-        # Other agents (MAX_OTHER_AGENTS * 3), padded with zeros
+        # Relative tagger direction + distance (3)
+        features.extend(obs["tagger_rel"])
+        features.append(obs["tagger_dist"])
+
+        # Relative nearest runner direction + distance (3)
+        features.extend(obs["nearest_runner_rel"])
+        features.append(obs["nearest_runner_dist"])
+
+        # Wall raycasts in 8 directions (8)
+        features.extend(obs["wall_rays"])
+
+        # Other agents sorted by distance (MAX_OTHER_AGENTS * 4)
         other = obs.get("other_agents", [])
         for i in range(MAX_OTHER_AGENTS):
             if i < len(other):
-                features.extend(other[i]["pos"])
+                features.extend(other[i]["rel_pos"])
+                features.append(other[i]["distance"])
                 features.append(1.0 if other[i]["is_tagger"] else 0.0)
             else:
-                features.extend([0.0, 0.0, 0.0])
+                features.extend([0.0, 0.0, 0.0, 0.0])
 
         return torch.tensor(features, dtype=torch.float32)
 
@@ -192,7 +210,6 @@ class PPO(BaseRLAlgorithm):
         state = self._obs_to_tensor(observation)
         action, log_prob, value = self.network.get_action_and_value(state)
 
-        # Store for learning (log_prob and value are needed for PPO update)
         self._last_state = state
         self._last_log_prob = log_prob.item()
         self._last_value = value.item()
@@ -202,7 +219,6 @@ class PPO(BaseRLAlgorithm):
     def learn(self, state: dict, action: int, reward: float,
               next_state: dict, done: bool):
         """Store transition and update when buffer is full."""
-        # Use the pre-computed state tensor and values from select_action
         if not hasattr(self, "_last_state"):
             return
 
@@ -216,13 +232,11 @@ class PPO(BaseRLAlgorithm):
         )
         self.total_steps += 1
 
-        # Update when we have enough transitions
         if len(self.buffer) >= ROLLOUT_LENGTH:
             self._update(next_state)
 
     def _update(self, last_obs: dict):
         """Run PPO update on the collected rollout."""
-        # Bootstrap value for the last state
         with torch.no_grad():
             last_state = self._obs_to_tensor(last_obs)
             _, last_value = self.network(last_state)
@@ -230,12 +244,10 @@ class PPO(BaseRLAlgorithm):
 
         advantages, returns = self.buffer.compute_gae(last_value)
 
-        # Normalize advantages
         adv_mean = advantages.mean()
         adv_std = advantages.std() + 1e-8
         advantages = (advantages - adv_mean) / adv_std
 
-        # Multiple epochs over the same rollout
         for _ in range(PPO_EPOCHS):
             for (mb_states, mb_actions, mb_old_log_probs,
                  mb_advantages, mb_returns) in self.buffer.get_batches(
@@ -244,22 +256,16 @@ class PPO(BaseRLAlgorithm):
                 new_log_probs, entropy, new_values = \
                     self.network.evaluate_actions(mb_states, mb_actions)
 
-                # Policy ratio
                 ratio = torch.exp(new_log_probs - mb_old_log_probs)
 
-                # Clipped surrogate objective
                 surr1 = ratio * mb_advantages
                 surr2 = torch.clamp(ratio, 1.0 - CLIP_EPSILON,
                                     1.0 + CLIP_EPSILON) * mb_advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
 
-                # Value loss (clipped)
                 value_loss = F.mse_loss(new_values, mb_returns)
-
-                # Entropy bonus (encourages exploration)
                 entropy_loss = -entropy.mean()
 
-                # Total loss
                 loss = (policy_loss
                         + VALUE_COEFF * value_loss
                         + ENTROPY_COEFF * entropy_loss)

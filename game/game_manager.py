@@ -1,5 +1,6 @@
 """Core game loop and state machine."""
 
+import os
 import sys
 import random
 import importlib
@@ -17,13 +18,20 @@ from ui.menu import Menu
 from ui.hud import HUD
 
 
+def _get_model_path(algo_name: str) -> str:
+    """Get standard model path for an algorithm."""
+    safe_name = algo_name.lower().replace("-", "_").replace(" ", "_")
+    return os.path.join(config.DEFAULT_MODEL_DIR, f"{safe_name}_model.pt")
+
+
 class GameManager:
     def __init__(self, screen: pygame.Surface, clock: pygame.time.Clock):
         self.screen = screen
         self.clock = clock
         self.state = config.GameState.MENU
         self.mode = config.GameMode.PLAYER_MODE
-        self.selected_algorithm = "Q-Learning"
+        self.train_mode = config.TrainMode.TRAIN_LIVE
+        self.selected_algorithm = "PPO"
 
         self.menu = Menu(screen)
         self.renderer = Renderer(screen)
@@ -61,6 +69,7 @@ class GameManager:
             if result:
                 self.mode = result["mode"]
                 self.selected_algorithm = result["algorithm"]
+                self.train_mode = result["train_mode"]
                 self._init_game()
                 self.state = config.GameState.PLAYING
 
@@ -127,6 +136,13 @@ class GameManager:
                 self.entities.append(agent)
                 entity_id += 1
 
+        # Load trained model if using pre-trained mode
+        if self.train_mode == config.TrainMode.USE_TRAINED:
+            model_path = _get_model_path(self.selected_algorithm)
+            if os.path.exists(model_path):
+                for agent in self.agents:
+                    agent.algorithm.load(model_path)
+
         # Spawn crates
         for cp in self.level.crate_spawns:
             self.movable_objects.append(MovableObject(cp[0], cp[1]))
@@ -143,6 +159,8 @@ class GameManager:
 
     def _update(self):
         """Update game state for one frame."""
+        is_training = (self.train_mode == config.TrainMode.TRAIN_LIVE)
+
         # 1. Gather actions
         keys = pygame.key.get_pressed()
         if self.player:
@@ -177,27 +195,27 @@ class GameManager:
         # 4. Update particles
         self.renderer.update_particles()
 
-        # 5. RL feedback
-        rewards = self.rl_env.get_all_rewards(tag_event)
-        for agent in self.agents:
-            next_obs = self.rl_env.get_observation(agent)
-            reward = rewards.get(agent.entity_id, 0.0)
-            done = (tag_event is not None and
-                    tag_event.get("tagged_id") == agent.entity_id)
-            agent.learn(reward, next_obs, done)
-
-        if tag_event:
+        # 5. RL feedback (only if training)
+        if is_training:
+            rewards = self.rl_env.get_all_rewards(tag_event)
             for agent in self.agents:
-                if agent.entity_id == tag_event.get("tagged_id"):
-                    agent.algorithm.reset()
+                next_obs = self.rl_env.get_observation(agent)
+                reward = rewards.get(agent.entity_id, 0.0)
+                done = (tag_event is not None and
+                        tag_event.get("tagged_id") == agent.entity_id)
+                agent.learn(reward, next_obs, done)
+
+            if tag_event:
+                for agent in self.agents:
+                    if agent.entity_id == tag_event.get("tagged_id"):
+                        agent.algorithm.reset()
 
     def _render(self):
         """Render the game."""
-        # Camera follows player in player mode, or first entity in sim mode
+        # Camera follows player in player mode, or tagger in sim mode
         if self.player:
             self.renderer.set_camera(self.player.x, self.player.y)
         elif self.entities:
-            # In simulation, follow the tagger
             for e in self.entities:
                 if e.is_tagger:
                     self.renderer.set_camera(e.x, e.y)
@@ -216,4 +234,4 @@ class GameManager:
 
         fps = self.clock.get_fps()
         self.hud.draw(self.entities, self.tag_logic, self.mode,
-                      self.selected_algorithm, fps)
+                      self.selected_algorithm, fps, self.train_mode)

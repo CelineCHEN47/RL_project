@@ -12,9 +12,12 @@ class Button:
         self.callback = callback
         self.hovered = False
         self.selected = False
+        self.disabled = False
         self.font = pygame.font.SysFont("Arial", 19, bold=True)
 
     def handle_event(self, event: pygame.event.Event) -> bool:
+        if self.disabled:
+            return False
         if event.type == pygame.MOUSEMOTION:
             self.hovered = self.rect.collidepoint(event.pos)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -25,7 +28,11 @@ class Button:
         return False
 
     def draw(self, surface: pygame.Surface):
-        if self.selected:
+        if self.disabled:
+            bg_color = (40, 40, 50)
+            border_color = (55, 55, 65)
+            text_color = (100, 100, 110)
+        elif self.selected:
             bg_color = (40, 160, 90)
             border_color = (80, 220, 130)
             text_color = (255, 255, 255)

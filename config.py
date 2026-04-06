@@ -50,6 +50,14 @@ class GameMode(Enum):
     SIMULATION_MODE = "Simulation Mode"
 
 
+class TrainMode(Enum):
+    TRAIN_LIVE = "Train Live"        # agents learn while playing
+    USE_TRAINED = "Use Trained"      # load pre-trained model, no learning
+
+
+DEFAULT_MODEL_DIR = "saved_models"
+
+
 # Algorithm registry: display name -> module path and class name
 RL_ALGORITHMS = {
     "Q-Learning": ("rl.q_learning", "QLearning"),

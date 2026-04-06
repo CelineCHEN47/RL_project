@@ -13,7 +13,8 @@ class HUD:
         self.font_small = pygame.font.SysFont("Arial", 13)
 
     def draw(self, entities, tag_logic, mode: config.GameMode,
-             algorithm: str, fps: float):
+             algorithm: str, fps: float,
+             train_mode: config.TrainMode = config.TrainMode.TRAIN_LIVE):
         """Draw HUD overlay."""
         sw = self.screen.get_width()
         sh = self.screen.get_height()
@@ -40,11 +41,17 @@ class HUD:
         text = self.font_large.render(tagger_label, True, (255, 120, 120))
         self.screen.blit(text, (30, bar_h // 2 - text.get_height() // 2))
 
-        # Mode + Algorithm (center)
-        mode_text = self.font.render(f"{mode.value}  |  {algorithm}", True,
-                                     (180, 180, 200))
-        self.screen.blit(mode_text, mode_text.get_rect(centerx=sw // 2,
-                                                        centery=bar_h // 2))
+        # Mode + Algorithm + Train mode (center)
+        train_label = "Training" if train_mode == config.TrainMode.TRAIN_LIVE else "Trained"
+        train_color = (100, 200, 100) if train_mode == config.TrainMode.TRAIN_LIVE else (100, 180, 255)
+        info_str = f"{mode.value}  |  {algorithm}  |  "
+        info_text = self.font.render(info_str, True, (180, 180, 200))
+        train_text = self.font.render(train_label, True, train_color)
+        total_w = info_text.get_width() + train_text.get_width()
+        info_x = sw // 2 - total_w // 2
+        self.screen.blit(info_text, (info_x, bar_h // 2 - info_text.get_height() // 2))
+        self.screen.blit(train_text, (info_x + info_text.get_width(),
+                                      bar_h // 2 - train_text.get_height() // 2))
 
         # FPS (top-right)
         fps_color = (100, 200, 100) if fps > 50 else (200, 200, 100) if fps > 30 else (200, 100, 100)
@@ -90,9 +97,9 @@ class HUD:
         self.screen.blit(hint_surf, (0, sh - hint_h))
 
         if mode == config.GameMode.PLAYER_MODE:
-            hint = "WASD / Arrows: Move  |  Walk near agents to tag  |  Push crates by walking into them  |  ESC: Menu"
+            hint = "WASD / Arrows: Move  |  Walk near agents to tag  |  Push crates  |  ESC: Menu"
         else:
-            hint = "Simulation Mode (agents are placeholder - stationary until RL is implemented)  |  ESC: Menu"
+            hint = f"Simulation Mode  |  {train_label}  |  ESC: Menu"
         hint_text = self.font_small.render(hint, True, (140, 140, 160))
         self.screen.blit(hint_text, hint_text.get_rect(centerx=sw // 2,
                                                         centery=sh - hint_h // 2))
