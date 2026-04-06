@@ -18,19 +18,21 @@ At each gradient step we minimize the Bellman error over a mini-batch:
 
     L = mean [ ( Q_theta(s_t, a_t) - y_t )^2 ]
 
-Observation encoding
---------------------
-Identical to ppo.py / dpo.py: flat 19-dim vector
-    [self_pos(2), self_vel(2), is_tagger(1), tagger_pos(2),
-     agent_0_pos(2), agent_0_is_tagger(1), ..., agent_3_pos(2), agent_3_is_tagger(1)]
-     (padded to MAX_OTHER_AGENTS = 4 slots)
+Observation encoding (ego-centric, matches ppo.py)
+---------------------------------------------------
+    [self_pos(2), self_vel(2), is_tagger(1),
+     tagger_rel(2), tagger_dist(1),
+     nearest_runner_rel(2), nearest_runner_dist(1),
+     wall_rays(8),
+     agent_0_rel(2), agent_0_dist(1), agent_0_is_tagger(1), ...,
+     agent_N_rel(2), agent_N_dist(1), agent_N_is_tagger(1)]
+    Padded to MAX_OTHER_AGENTS = 6 slots.  Total: 43 dims.
 """
 
 import os
 import random
 from collections import deque
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,8 +43,8 @@ from rl.base_algorithm import BaseRLAlgorithm
 # ---------------------------------------------------------------------------
 # Hyperparameters
 # ---------------------------------------------------------------------------
-MAX_OTHER_AGENTS     = 4
-OBS_DIM              = 2 + 2 + 1 + 2 + MAX_OTHER_AGENTS * 3   # = 19
+MAX_OTHER_AGENTS     = 6
+OBS_DIM              = 2 + 2 + 1 + 2 + 1 + 2 + 1 + 8 + MAX_OTHER_AGENTS * 4  # = 43
 HIDDEN_DIM           = 128
 LEARNING_RATE        = 1e-3
 GAMMA                = 0.99
@@ -105,11 +107,11 @@ class ReplayBuffer:
         states, actions, rewards, next_states, dones = zip(*batch)
 
         return (
-            torch.stack(states),                                        # (B, obs_dim)
-            torch.tensor(actions,  dtype=torch.long),                   # (B,)
-            torch.tensor(rewards,  dtype=torch.float32),                # (B,)
-            torch.stack(next_states),                                   # (B, obs_dim)
-            torch.tensor(dones,    dtype=torch.float32),                # (B,)
+            torch.stack(states),
+            torch.tensor(actions,  dtype=torch.long),
+            torch.tensor(rewards,  dtype=torch.float32),
+            torch.stack(next_states),
+            torch.tensor(dones,    dtype=torch.float32),
         )
 
     def __len__(self) -> int:
@@ -124,18 +126,15 @@ class DQN(BaseRLAlgorithm):
     Deep Q-Network agent for the Tag game.
 
     Compatible with the BaseRLAlgorithm interface.  The game loop calls:
-        action = agent.select_action(obs)           # every DECISION_INTERVAL
+        action = agent.select_action(obs)
         agent.learn(obs, action, reward, next_obs, done)
     """
 
     def __init__(self):
         self.device = torch.device("cpu")
 
-        # Online and target Q-networks
-        self.q_net     = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM)
+        self.q_net      = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM)
         self.target_net = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM)
-        self.q_net.to(self.device)
-        self.target_net.to(self.device)
 
         # Sync target = online at init; freeze target gradients
         self.target_net.load_state_dict(self.q_net.state_dict())
@@ -145,34 +144,48 @@ class DQN(BaseRLAlgorithm):
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=LEARNING_RATE)
         self.replay_buffer = ReplayBuffer(REPLAY_BUFFER_SIZE)
 
-        # Exploration state
         self.epsilon     = EPSILON_START
         self.total_steps = 0
-
-        # Diagnostics (inspectable from outside)
         self.last_loss   = 0.0
 
-        # Cache from select_action for use in learn()
         self._last_state: torch.Tensor | None = None
 
     # ------------------------------------------------------------------
-    # Observation encoding  (matches ppo.py / dpo.py)
+    # Observation encoding (ego-centric, matches ppo.py)
     # ------------------------------------------------------------------
     def _obs_to_tensor(self, obs: dict) -> torch.Tensor:
         features = []
+
+        # Self position (2)
         features.extend(obs["self_pos"])
+
+        # Self velocity (2)
         features.append(obs["self_vel"][0] / 3.0)
         features.append(obs["self_vel"][1] / 3.0)
-        features.append(1.0 if obs["is_tagger"] else 0.0)
-        features.extend(obs["tagger_pos"])
 
+        # Is tagger (1)
+        features.append(1.0 if obs["is_tagger"] else 0.0)
+
+        # Relative tagger direction + distance (3)
+        features.extend(obs["tagger_rel"])
+        features.append(obs["tagger_dist"])
+
+        # Relative nearest runner direction + distance (3)
+        features.extend(obs["nearest_runner_rel"])
+        features.append(obs["nearest_runner_dist"])
+
+        # Wall raycasts in 8 directions (8)
+        features.extend(obs["wall_rays"])
+
+        # Other agents sorted by distance (MAX_OTHER_AGENTS * 4)
         other = obs.get("other_agents", [])
         for i in range(MAX_OTHER_AGENTS):
             if i < len(other):
-                features.extend(other[i]["pos"])
+                features.extend(other[i]["rel_pos"])
+                features.append(other[i]["distance"])
                 features.append(1.0 if other[i]["is_tagger"] else 0.0)
             else:
-                features.extend([0.0, 0.0, 0.0])
+                features.extend([0.0, 0.0, 0.0, 0.0])
 
         return torch.tensor(features, dtype=torch.float32)
 
@@ -180,26 +193,23 @@ class DQN(BaseRLAlgorithm):
     # Epsilon schedule
     # ------------------------------------------------------------------
     def _current_epsilon(self) -> float:
-        """Linearly decay epsilon from START to END over DECAY_STEPS."""
-        ratio   = min(self.total_steps / EPSILON_DECAY_STEPS, 1.0)
+        ratio = min(self.total_steps / EPSILON_DECAY_STEPS, 1.0)
         return EPSILON_START + ratio * (EPSILON_END - EPSILON_START)
 
     # ------------------------------------------------------------------
-    # Action selection  (epsilon-greedy)
+    # Action selection (epsilon-greedy)
     # ------------------------------------------------------------------
     def select_action(self, observation: dict) -> int:
-        state = self._obs_to_tensor(observation).to(self.device)
+        state = self._obs_to_tensor(observation)
         self._last_state = state
 
         self.epsilon = self._current_epsilon()
 
         if random.random() < self.epsilon:
-            # Explore: uniform random action
             return random.randrange(self.ACTION_SPACE_SIZE)
 
-        # Exploit: pick action with highest Q-value
         with torch.no_grad():
-            q_values = self.q_net(state.unsqueeze(0)).squeeze(0)  # (action_dim,)
+            q_values = self.q_net(state.unsqueeze(0)).squeeze(0)
         return int(q_values.argmax().item())
 
     # ------------------------------------------------------------------
@@ -207,26 +217,20 @@ class DQN(BaseRLAlgorithm):
     # ------------------------------------------------------------------
     def learn(self, state: dict, action: int, reward: float,
               next_state: dict, done: bool):
-        """
-        Store transition in replay buffer; sample a mini-batch and update
-        the online Q-network once the buffer is warm.
-        """
         if self._last_state is None:
             return
 
-        next_state_tensor = self._obs_to_tensor(next_state).to(self.device)
+        next_state_tensor = self._obs_to_tensor(next_state)
         self.replay_buffer.add(
             self._last_state, action, reward, next_state_tensor, done
         )
         self.total_steps += 1
 
-        # Don't start learning until the buffer is warm
         if len(self.replay_buffer) < MIN_REPLAY_SIZE:
             return
 
         self._update()
 
-        # Hard-sync target network periodically
         if self.total_steps % TARGET_UPDATE_FREQ == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
@@ -234,30 +238,17 @@ class DQN(BaseRLAlgorithm):
     # Q-network update
     # ------------------------------------------------------------------
     def _update(self):
-        """One gradient step of DQN on a random mini-batch."""
         states, actions, rewards, next_states, dones = \
             self.replay_buffer.sample(BATCH_SIZE)
 
-        states      = states.to(self.device)
-        actions     = actions.to(self.device)
-        rewards     = rewards.to(self.device)
-        next_states = next_states.to(self.device)
-        dones       = dones.to(self.device)
+        q_values = self.q_net(states)
+        q_sa = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
 
-        # Current Q-values for the taken actions: Q_theta(s, a)
-        # q_net outputs (B, action_dim); gather selects the action column
-        q_values = self.q_net(states)                        # (B, action_dim)
-        q_sa     = q_values.gather(
-            1, actions.unsqueeze(1)
-        ).squeeze(1)                                         # (B,)
-
-        # TD targets: r + gamma * max_{a'} Q_theta'(s', a')
         with torch.no_grad():
-            next_q      = self.target_net(next_states)       # (B, action_dim)
-            max_next_q  = next_q.max(dim=1).values           # (B,)
-            td_target   = rewards + GAMMA * max_next_q * (1.0 - dones)
+            next_q     = self.target_net(next_states)
+            max_next_q = next_q.max(dim=1).values
+            td_target  = rewards + GAMMA * max_next_q * (1.0 - dones)
 
-        # Huber loss (smooth L1) — more robust to outliers than plain MSE
         loss = F.smooth_l1_loss(q_sa, td_target)
 
         self.optimizer.zero_grad()
@@ -271,31 +262,25 @@ class DQN(BaseRLAlgorithm):
     # Episode boundary
     # ------------------------------------------------------------------
     def reset(self):
-        """Called on tag transfer.  No episode-level state to reset for DQN."""
         pass
 
     # ------------------------------------------------------------------
     # Serialization
     # ------------------------------------------------------------------
     def save(self, path: str):
-        """Save Q-networks, optimizer, and training counters."""
         os.makedirs(
             os.path.dirname(path) if os.path.dirname(path) else ".",
             exist_ok=True,
         )
-        torch.save(
-            {
-                "q_net":      self.q_net.state_dict(),
-                "target_net": self.target_net.state_dict(),
-                "optimizer":  self.optimizer.state_dict(),
-                "total_steps": self.total_steps,
-                "epsilon":    self.epsilon,
-            },
-            path,
-        )
+        torch.save({
+            "q_net":       self.q_net.state_dict(),
+            "target_net":  self.target_net.state_dict(),
+            "optimizer":   self.optimizer.state_dict(),
+            "total_steps": self.total_steps,
+            "epsilon":     self.epsilon,
+        }, path)
 
     def load(self, path: str):
-        """Restore Q-networks, optimizer, and training counters."""
         if not os.path.exists(path):
             return
         ckpt = torch.load(path, map_location=self.device)
@@ -303,4 +288,4 @@ class DQN(BaseRLAlgorithm):
         self.target_net.load_state_dict(ckpt["target_net"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
         self.total_steps = ckpt.get("total_steps", 0)
-        self.epsilon     = ckpt.get("epsilon",     EPSILON_END)
+        self.epsilon     = ckpt.get("epsilon", EPSILON_END)
