@@ -324,5 +324,5 @@ Agents only decide every `DECISION_INTERVAL` frames (default: 4 in `config.py`).
 - pygame 2.x
 - numpy
 
-For neural network algorithms (PPO, DQN), you'll also need:
+For neural network algorithms (PPO, DQN), you'll also need :
 - PyTorch (`pip install torch`) or TensorFlow
