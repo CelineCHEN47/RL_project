@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Automated DPO Experiment Pipeline.
+"""Automated DQN Experiment Pipeline.
 
 Handles the full experiment workflow:
-  1. Train DPO and save checkpoints at specified epoch milestones.
+  1. Train DQN and save checkpoints at specified epoch milestones.
   2. Load each checkpoint and run evaluation episodes (no learning).
   3. Collect quantitative metrics (tags, survival steps).
   4. Record agent trajectories for qualitative behavioral analysis.
@@ -15,19 +15,19 @@ Key flag: --display
 
 Usage:
     # Headless full experiment
-    python run_dpo_experiment.py
+    python run_experiment.py
 
     # Watch training live on your local machine
-    python run_dpo_experiment.py --display
+    python run_experiment.py --display
 
     # Evaluate only (skip training, use existing checkpoints)
-    python run_dpo_experiment.py --eval-only
+    python run_experiment.py --eval-only
 
     # Custom epochs
-    python run_dpo_experiment.py --epochs 10 50 100 200 500 1000
+    python run_experiment.py --epochs 10 50 100 200 500 1000
 
     # Display only the evaluation phase (watch trained agents)
-    python run_dpo_experiment.py --eval-only --display
+    python run_experiment.py --eval-only --display
 """
 
 import argparse
@@ -40,13 +40,13 @@ import time
 # ======================================================================
 # Default experiment configuration
 # ======================================================================
-ALGORITHM_NAME   = "DPO"
+ALGORITHM_NAME   = "DQN"
 DEFAULT_EPOCHS   = [10, 50, 100, 200, 500, 1000]
 STEPS_PER_ROUND  = 1000
 PARALLEL_SIMS    = 2
 EVAL_EPISODES    = 20
 EVAL_STEPS       = 2000
-SAVE_DIR         = "experiments/dpo"
+SAVE_DIR         = "experiments/dqn"
 LOG_INTERVAL     = 5
 
 
@@ -67,7 +67,7 @@ def init_pygame(display: bool):
         screen = pygame.display.set_mode(
             (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         )
-        pygame.display.set_caption("DPO Experiment — Training")
+        pygame.display.set_caption("DQN Experiment — Training")
         clock = pygame.time.Clock()
         return screen, clock
     else:
@@ -84,7 +84,7 @@ def get_algo_class(algo_name: str):
         print(f"Error: '{algo_name}' not in config.RL_ALGORITHMS.")
         print(f"Available: {list(config.RL_ALGORITHMS.keys())}")
         print(f"\nMake sure you added this to config.py:\n"
-              f'  "{algo_name}": ("rl.dpo", "DPO"),')
+              f'  "{algo_name}": ("rl.dqn", "DQN"),')
         sys.exit(1)
     module_path, class_name = config.RL_ALGORITHMS[algo_name]
     module = importlib.import_module(module_path)
@@ -92,7 +92,7 @@ def get_algo_class(algo_name: str):
 
 
 def checkpoint_path(save_dir: str, epoch: int) -> str:
-    return os.path.join(save_dir, "checkpoints", f"dpo_epoch_{epoch}.pt")
+    return os.path.join(save_dir, "checkpoints", f"dqn_epoch_{epoch}.pt")
 
 
 # ======================================================================
@@ -199,7 +199,7 @@ def train_with_checkpoints(algo_class, epochs: list[int], save_dir: str,
     training_log = []
 
     print("=" * 65)
-    print(f"  PHASE 1: Training DPO  (max {max_epoch} rounds)")
+    print(f"  PHASE 1: Training DQN  (max {max_epoch} rounds)")
     print(f"  Checkpoints at: {sorted(epochs)}")
     print(f"  Parallel sims: {parallel_sims}, Steps/round: {STEPS_PER_ROUND}")
     print(f"  Agents per sim: {num_agents}")
@@ -387,7 +387,7 @@ def run_evaluations(algo_class, epochs: list[int], save_dir: str,
         if display_mgr:
             import pygame
             pygame.display.set_caption(
-                f"DPO Experiment — Eval Epoch {epoch}"
+                f"DQN Experiment — Eval Epoch {epoch}"
             )
 
         metrics, trajectories = evaluate_checkpoint(
@@ -446,7 +446,7 @@ def generate_plots(save_dir: str, training_log: list | None,
                 linewidth=2, label=f"Smoothed (w={window})")
         ax.set_xlabel("Training Round")
         ax.set_ylabel("Tags per Round")
-        ax.set_title("DPO Training Curve")
+        ax.set_title("DQN Training Curve")
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
@@ -466,7 +466,7 @@ def generate_plots(save_dir: str, training_log: list | None,
         ax.set_xticks(range(len(ep_list)))
         ax.set_xticklabels([f"Epoch\n{e}" for e in ep_list])
         ax.set_ylabel("Mean Tags per Episode")
-        ax.set_title("DPO Performance by Training Epoch")
+        ax.set_title("DQN Performance by Training Epoch")
         ax.grid(True, axis="y", alpha=0.3)
         fig.tight_layout()
         fig.savefig(os.path.join(plots_dir, "epoch_comparison.png"), dpi=150)
@@ -534,7 +534,7 @@ def generate_plots(save_dir: str, training_log: list | None,
 # ======================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated DPO Experiment Pipeline",
+        description="Automated DQN Experiment Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
