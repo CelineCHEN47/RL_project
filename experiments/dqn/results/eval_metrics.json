@@ -1,0 +1,22 @@
+[
+  {
+    "checkpoint": "experiments/dqn/checkpoints/dqn_epoch_2.pt",
+    "num_episodes": 2,
+    "mean_tags": 0.0,
+    "std_tags": 0.0,
+    "min_tags": 0,
+    "max_tags": 0,
+    "total_tags": 0,
+    "epoch": 2
+  },
+  {
+    "checkpoint": "experiments/dqn/checkpoints/dqn_epoch_5.pt",
+    "num_episodes": 2,
+    "mean_tags": 0.0,
+    "std_tags": 0.0,
+    "min_tags": 0,
+    "max_tags": 0,
+    "total_tags": 0,
+    "epoch": 5
+  }
+]
