@@ -1,0 +1,22 @@
+[
+  {
+    "checkpoint": "experiments/ppo/checkpoints/ppo_epoch_5.pt",
+    "num_episodes": 3,
+    "mean_tags": 0.0,
+    "std_tags": 0.0,
+    "min_tags": 0,
+    "max_tags": 0,
+    "total_tags": 0,
+    "epoch": 5
+  },
+  {
+    "checkpoint": "experiments/ppo/checkpoints/ppo_epoch_10.pt",
+    "num_episodes": 3,
+    "mean_tags": 0.0,
+    "std_tags": 0.0,
+    "min_tags": 0,
+    "max_tags": 0,
+    "total_tags": 0,
+    "epoch": 10
+  }
+]

@@ -3,14 +3,17 @@
 This defines the interface that every RL algorithm must implement.
 Teammates: subclass this and fill in the abstract methods.
 
-Observation format (dict):
-    - "self_pos": tuple(float, float) - normalized position [0, 1]
+Observation format (dict, ego-centric):
+    - "self_pos": tuple(float, float) - normalized absolute position [0, 1]
     - "self_vel": tuple(float, float) - current velocity
     - "is_tagger": bool - whether this agent is "it"
-    - "other_agents": list of dicts with "pos" and "is_tagger"
-    - "tagger_pos": tuple(float, float) - position of current tagger
-    - "nearby_walls": list of tuple(int, int) - grid coords of nearby walls
-    - "nearby_crates": list of tuple(int, int) - pixel coords of nearby crates
+    - "tagger_rel": tuple(float, float) - relative direction to tagger
+    - "tagger_dist": float - normalized distance to tagger
+    - "nearest_runner_rel": tuple(float, float) - relative direction to nearest runner
+    - "nearest_runner_dist": float - normalized distance to nearest runner
+    - "wall_rays": list[float] - 8 raycasts (N,NE,E,SE,S,SW,W,NW), normalized distance
+    - "other_agents": list of dicts with "rel_pos", "distance", "is_tagger"
+    - "nearby_crates": list of tuple(float, float) - relative crate positions
 
 Action space: discrete, 5 actions
     0 = no-op (stand still)

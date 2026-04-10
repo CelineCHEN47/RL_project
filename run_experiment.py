@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
-"""Automated DQN Experiment Pipeline.
+"""Automated RL Experiment Pipeline.
 
-Handles the full experiment workflow:
-  1. Train DQN and save checkpoints at specified epoch milestones.
+Handles the full experiment workflow for any algorithm:
+  1. Train and save checkpoints at specified epoch milestones.
   2. Load each checkpoint and run evaluation episodes (no learning).
   3. Collect quantitative metrics (tags, survival steps).
   4. Record agent trajectories for qualitative behavioral analysis.
   5. Generate plots: learning curves, performance comparison, trajectory maps.
 
 Key flag: --display
-  Without it  → headless mode, fast training, works on remote servers.
-  With it     → opens a Pygame window so you can watch agents live.
+  Without it  -> headless mode, fast training, works on remote servers.
+  With it     -> opens a Pygame window so you can watch agents live.
                (Forces --sims 1; throttled to game FPS.)
 
 Usage:
-    # Headless full experiment
-    python run_experiment.py
+    # Headless full experiment with PPO
+    python run_experiment.py --algorithm PPO
 
     # Watch training live on your local machine
-    python run_experiment.py --display
+    python run_experiment.py --algorithm PPO --display
 
     # Evaluate only (skip training, use existing checkpoints)
-    python run_experiment.py --eval-only
+    python run_experiment.py --algorithm PPO --eval-only
 
-    # Custom epochs
-    python run_experiment.py --epochs 10 50 100 200 500 1000
+    # Custom epochs and algorithm
+    python run_experiment.py --algorithm DQN --epochs 10 50 100 200 500 1000
 
     # Display only the evaluation phase (watch trained agents)
-    python run_experiment.py --eval-only --display
+    python run_experiment.py --algorithm Q-Learning --eval-only --display
 """
 
 import argparse
@@ -40,13 +40,11 @@ import time
 # ======================================================================
 # Default experiment configuration
 # ======================================================================
-ALGORITHM_NAME   = "SARSA"
 DEFAULT_EPOCHS   = [10, 50, 100, 200, 500, 1000]
 STEPS_PER_ROUND  = 1000
 PARALLEL_SIMS    = 2
 EVAL_EPISODES    = 20
 EVAL_STEPS       = 2000
-SAVE_DIR         = "experiments/sarsa"
 LOG_INTERVAL     = 5
 
 
@@ -67,7 +65,7 @@ def init_pygame(display: bool):
         screen = pygame.display.set_mode(
             (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         )
-        pygame.display.set_caption("DQN Experiment — Training")
+        pygame.display.set_caption("RL Experiment — Training")
         clock = pygame.time.Clock()
         return screen, clock
     else:
@@ -83,24 +81,27 @@ def get_algo_class(algo_name: str):
     if algo_name not in config.RL_ALGORITHMS:
         print(f"Error: '{algo_name}' not in config.RL_ALGORITHMS.")
         print(f"Available: {list(config.RL_ALGORITHMS.keys())}")
-        print(f"\nMake sure you added this to config.py:\n"
-              f'  "{algo_name}": ("rl.dqn", "DQN"),')
         sys.exit(1)
     module_path, class_name = config.RL_ALGORITHMS[algo_name]
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
 
-def checkpoint_path(save_dir: str, epoch: int) -> str:
-    return os.path.join(save_dir, "checkpoints", f"dqn_epoch_{epoch}.pt")
+def checkpoint_path(save_dir: str, algo_name: str, epoch: int) -> str:
+    safe_name = algo_name.lower().replace("-", "_").replace(" ", "_")
+    return os.path.join(save_dir, "checkpoints", f"{safe_name}_epoch_{epoch}.pt")
+
+
+def get_save_dir(algo_name: str) -> str:
+    safe_name = algo_name.lower().replace("-", "_").replace(" ", "_")
+    return os.path.join("experiments", safe_name)
 
 
 # ======================================================================
 # Renderer wrapper — only active when --display is on
 # ======================================================================
 class DisplayManager:
-    """Thin wrapper around the project's Renderer for the experiment script.
-    Created only when --display is passed."""
+    """Thin wrapper around the project's Renderer for the experiment script."""
 
     def __init__(self, screen, clock):
         import pygame
@@ -119,7 +120,6 @@ class DisplayManager:
 
     @staticmethod
     def _safe_sys_font(name: str, size: int, bold: bool = False):
-        """Prefer system font but fall back to pygame default if discovery fails."""
         import pygame
         try:
             return pygame.font.SysFont(name, size, bold=bold)
@@ -129,12 +129,10 @@ class DisplayManager:
             return font
 
     def set_hud(self, lines: list[str]):
-        """Set overlay text lines shown in top-left corner."""
         self.hud_lines = lines
 
     def render_sim(self, sim):
-        """Render one frame of a HeadlessSimulation.
-        Returns 'skip' if user pressed ESC, else None."""
+        """Render one frame. Returns 'skip' if user pressed ESC."""
         pygame = self.pygame
 
         for event in pygame.event.get():
@@ -144,7 +142,6 @@ class DisplayManager:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 return "skip"
 
-        # Camera follows the tagger
         for e in sim.entities:
             if e.is_tagger:
                 self.renderer.set_camera(e.x, e.y)
@@ -161,7 +158,6 @@ class DisplayManager:
         self.renderer.update_particles()
         self.renderer.draw_particles()
 
-        # HUD overlay
         y = 8
         for line in self.hud_lines:
             surf = self.font.render(line, True, (255, 255, 255))
@@ -182,35 +178,40 @@ class DisplayManager:
 # ======================================================================
 # Phase 1: Training with periodic checkpoint saving
 # ======================================================================
-def train_with_checkpoints(algo_class, epochs: list[int], save_dir: str,
+def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
+                           save_dir: str,
                            display_mgr: DisplayManager | None,
                            parallel_sims: int):
+    import config
     from game.simulation import HeadlessSimulation
 
     ckpt_dir = os.path.join(save_dir, "checkpoints")
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    # Create shared algorithm instances
-    sample_sim = HeadlessSimulation(algo_class)
-    num_agents = len(sample_sim.agents)
-    shared_algorithms = [agent.algorithm for agent in sample_sim.agents]
-    del sample_sim
+    # Create first simulation (sets up shared dual-role models)
+    first_sim = HeadlessSimulation(algo_class)
+    shared_tagger, shared_runner = first_sim.get_shared_algos()
+    num_agents = len(first_sim.agents)
 
-    # Display mode forces 1 sim (can only render one)
     if display_mgr:
         parallel_sims = 1
 
-    sims = []
-    for _ in range(parallel_sims):
-        sim = HeadlessSimulation(algo_class, shared_algorithms=shared_algorithms)
+    sims = [first_sim]
+    for _ in range(parallel_sims - 1):
+        sim = HeadlessSimulation(algo_class,
+                                 shared_tagger=shared_tagger,
+                                 shared_runner=shared_runner)
         sims.append(sim)
 
     max_epoch = max(epochs)
     epoch_set = set(epochs)
     training_log = []
 
+    role_mode = "Dual (tagger + runner)" if config.DUAL_ROLE_ENABLED else "Single"
+
     print("=" * 65)
-    print(f"  PHASE 1: Training DQN  (max {max_epoch} rounds)")
+    print(f"  PHASE 1: Training {algo_name}  (max {max_epoch} rounds)")
+    print(f"  Role mode: {role_mode}")
     print(f"  Checkpoints at: {sorted(epochs)}")
     print(f"  Parallel sims: {parallel_sims}, Steps/round: {STEPS_PER_ROUND}")
     print(f"  Agents per sim: {num_agents}")
@@ -246,7 +247,7 @@ def train_with_checkpoints(algo_class, epochs: list[int], save_dir: str,
                     (e for e in sorted(epochs) if e >= round_num), default=None
                 )
                 display_mgr.set_hud([
-                    f"TRAINING — Round {round_num}/{max_epoch}  "
+                    f"TRAINING {algo_name} — Round {round_num}/{max_epoch}  "
                     f"Step {step+1}/{STEPS_PER_ROUND}",
                     f"Round tags: {round_tags}  |  "
                     f"Total tags: {total_tags + round_tags}",
@@ -272,17 +273,15 @@ def train_with_checkpoints(algo_class, epochs: list[int], save_dir: str,
                   f"Elapsed: {elapsed:.1f}s")
 
         if round_num in epoch_set:
-            path = checkpoint_path(save_dir, round_num)
-            for algo in shared_algorithms:
-                algo.save(path)
+            path = checkpoint_path(save_dir, algo_name, round_num)
+            first_sim.agents[0].algorithm.save(path)
             print(f"  >> Checkpoint saved: {path}")
 
         if skip:
             for ep in sorted(epochs):
                 if ep > round_num:
-                    path = checkpoint_path(save_dir, ep)
-                    for algo in shared_algorithms:
-                        algo.save(path)
+                    path = checkpoint_path(save_dir, algo_name, ep)
+                    first_sim.agents[0].algorithm.save(path)
                     print(f"  >> Early-stop checkpoint: {path} "
                           f"(actual: {round_num} rounds)")
             break
@@ -301,8 +300,8 @@ def train_with_checkpoints(algo_class, epochs: list[int], save_dir: str,
 # ======================================================================
 # Phase 2: Evaluation + Trajectory Recording
 # ======================================================================
-def evaluate_checkpoint(algo_class, ckpt_path: str, num_episodes: int,
-                        steps_per_episode: int,
+def evaluate_checkpoint(algo_class, algo_name: str, ckpt_path: str,
+                        num_episodes: int, steps_per_episode: int,
                         display_mgr: DisplayManager | None,
                         epoch_label: str = ""):
     from game.simulation import HeadlessSimulation
@@ -311,8 +310,8 @@ def evaluate_checkpoint(algo_class, ckpt_path: str, num_episodes: int,
     sim = HeadlessSimulation(algo_class)
     num_agents = len(sim.agents)
 
-    for agent in sim.agents:
-        agent.algorithm.load(ckpt_path)
+    # Load checkpoint — DualRoleAlgorithm.load handles _tagger/_runner paths
+    sim.agents[0].algorithm.load(ckpt_path)
 
     episode_metrics = []
     all_trajectories = []
@@ -341,7 +340,7 @@ def evaluate_checkpoint(algo_class, ckpt_path: str, num_episodes: int,
 
             if display_mgr:
                 display_mgr.set_hud([
-                    f"EVAL — Epoch {epoch_label}  "
+                    f"EVAL {algo_name} — Epoch {epoch_label}  "
                     f"Episode {ep+1}/{num_episodes}  "
                     f"Step {step+1}/{steps_per_episode}",
                     f"Episode tags: {ep_tags}",
@@ -369,8 +368,8 @@ def evaluate_checkpoint(algo_class, ckpt_path: str, num_episodes: int,
     return metrics, all_trajectories
 
 
-def run_evaluations(algo_class, epochs: list[int], save_dir: str,
-                    display_mgr: DisplayManager | None,
+def run_evaluations(algo_class, algo_name: str, epochs: list[int],
+                    save_dir: str, display_mgr: DisplayManager | None,
                     eval_episodes: int):
     results_dir = os.path.join(save_dir, "results")
     traj_dir = os.path.join(save_dir, "trajectories")
@@ -378,7 +377,7 @@ def run_evaluations(algo_class, epochs: list[int], save_dir: str,
     os.makedirs(traj_dir, exist_ok=True)
 
     print("=" * 65)
-    print(f"  PHASE 2: Evaluating checkpoints")
+    print(f"  PHASE 2: Evaluating {algo_name} checkpoints")
     print(f"  Epochs: {sorted(epochs)}")
     print(f"  Episodes per checkpoint: {eval_episodes}")
     print(f"  Steps per episode: {EVAL_STEPS}")
@@ -389,8 +388,10 @@ def run_evaluations(algo_class, epochs: list[int], save_dir: str,
     all_metrics = []
 
     for epoch in sorted(epochs):
-        ckpt = checkpoint_path(save_dir, epoch)
-        if not os.path.exists(ckpt):
+        ckpt = checkpoint_path(save_dir, algo_name, epoch)
+        # Check for both single and dual-role checkpoint files
+        from rl.dual_role import dual_model_exists
+        if not os.path.exists(ckpt) and not dual_model_exists(ckpt):
             print(f"  [SKIP] Not found: {ckpt}")
             continue
 
@@ -398,11 +399,11 @@ def run_evaluations(algo_class, epochs: list[int], save_dir: str,
         if display_mgr:
             import pygame
             pygame.display.set_caption(
-                f"DQN Experiment — Eval Epoch {epoch}"
+                f"{algo_name} Experiment — Eval Epoch {epoch}"
             )
 
         metrics, trajectories = evaluate_checkpoint(
-            algo_class, ckpt, eval_episodes, EVAL_STEPS,
+            algo_class, algo_name, ckpt, eval_episodes, EVAL_STEPS,
             display_mgr, epoch_label=str(epoch),
         )
         metrics["epoch"] = epoch
@@ -430,7 +431,7 @@ def run_evaluations(algo_class, epochs: list[int], save_dir: str,
 # ======================================================================
 # Phase 3: Generate Plots
 # ======================================================================
-def generate_plots(save_dir: str, training_log: list | None,
+def generate_plots(algo_name: str, save_dir: str, training_log: list | None,
                    eval_metrics: list):
     try:
         import matplotlib
@@ -439,6 +440,7 @@ def generate_plots(save_dir: str, training_log: list | None,
         import numpy as np
     except ImportError:
         print("  [WARN] matplotlib not installed — skipping plots.")
+        print("  Install with: pip install matplotlib")
         return
 
     plots_dir = os.path.join(save_dir, "plots")
@@ -457,7 +459,7 @@ def generate_plots(save_dir: str, training_log: list | None,
                 linewidth=2, label=f"Smoothed (w={window})")
         ax.set_xlabel("Training Round")
         ax.set_ylabel("Tags per Round")
-        ax.set_title("DQN Training Curve")
+        ax.set_title(f"{algo_name} Training Curve")
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
@@ -477,7 +479,7 @@ def generate_plots(save_dir: str, training_log: list | None,
         ax.set_xticks(range(len(ep_list)))
         ax.set_xticklabels([f"Epoch\n{e}" for e in ep_list])
         ax.set_ylabel("Mean Tags per Episode")
-        ax.set_title("DQN Performance by Training Epoch")
+        ax.set_title(f"{algo_name} Performance by Training Epoch")
         ax.grid(True, axis="y", alpha=0.3)
         fig.tight_layout()
         fig.savefig(os.path.join(plots_dir, "epoch_comparison.png"), dpi=150)
@@ -498,7 +500,8 @@ def generate_plots(save_dir: str, training_log: list | None,
             continue
 
         fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-        fig.suptitle(f"Agent Trajectories — Epoch {epoch_label}", fontsize=14)
+        fig.suptitle(f"{algo_name} Trajectories — Epoch {epoch_label}",
+                     fontsize=14)
         colors = plt.cm.tab10.colors
 
         ep = episodes[0]
@@ -512,10 +515,12 @@ def generate_plots(save_dir: str, training_log: list | None,
             axes[0].plot(xs, ys, color=c, alpha=0.5, linewidth=0.8,
                          label=f"Agent {idx}")
             axes[0].scatter(xs[0], ys[0], color=c, marker="o", s=60, zorder=5)
-            axes[0].scatter(xs[-1], ys[-1], color=c, marker="x", s=60, zorder=5)
+            axes[0].scatter(xs[-1], ys[-1], color=c, marker="x", s=60,
+                            zorder=5)
 
-        axes[0].set_title("Trajectories (○=start, ×=end)")
-        axes[0].set_xlabel("X");  axes[0].set_ylabel("Y")
+        axes[0].set_title("Trajectories (o=start, x=end)")
+        axes[0].set_xlabel("X")
+        axes[0].set_ylabel("Y")
         axes[0].invert_yaxis()
         axes[0].legend(fontsize=8)
         axes[0].set_aspect("equal")
@@ -528,7 +533,8 @@ def generate_plots(save_dir: str, training_log: list | None,
         if all_xs:
             axes[1].hist2d(all_xs, all_ys, bins=30, cmap="hot")
             axes[1].set_title("Position Heatmap")
-            axes[1].set_xlabel("X");  axes[1].set_ylabel("Y")
+            axes[1].set_xlabel("X")
+            axes[1].set_ylabel("Y")
             axes[1].invert_yaxis()
 
         fig.tight_layout()
@@ -545,17 +551,19 @@ def generate_plots(save_dir: str, training_log: list | None,
 # ======================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated DQN Experiment Pipeline",
+        description="Automated RL Experiment Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
+    parser.add_argument("--algorithm", "-a", type=str, default="PPO",
+                        help="Algorithm to experiment with (default: PPO)")
     parser.add_argument("--epochs", nargs="+", type=int,
                         default=DEFAULT_EPOCHS,
                         help=f"Epoch milestones (default: {DEFAULT_EPOCHS})")
     parser.add_argument("--eval-only", action="store_true",
                         help="Skip training; evaluate existing checkpoints")
-    parser.add_argument("--save-dir", type=str, default=SAVE_DIR,
-                        help=f"Output directory (default: {SAVE_DIR})")
+    parser.add_argument("--save-dir", type=str, default=None,
+                        help="Output directory (default: experiments/<algo>)")
     parser.add_argument("--eval-episodes", type=int, default=EVAL_EPISODES,
                         help=f"Episodes per eval (default: {EVAL_EPISODES})")
     parser.add_argument("--sims", type=int, default=PARALLEL_SIMS,
@@ -566,44 +574,48 @@ def main():
                              "(local only; forces --sims 1)")
     args = parser.parse_args()
 
-    # --- Init Pygame ---
+    algo_name = args.algorithm
+    save_dir = args.save_dir or get_save_dir(algo_name)
+
+    # Init Pygame
     screen, clock = init_pygame(args.display)
 
-    algo_class = get_algo_class(ALGORITHM_NAME)
+    algo_class = get_algo_class(algo_name)
 
     display_mgr = None
     if args.display and screen is not None:
         display_mgr = DisplayManager(screen, clock)
 
-    # Phase 1
+    # Phase 1: Train
     training_log = None
     if not args.eval_only:
         training_log = train_with_checkpoints(
-            algo_class, args.epochs, args.save_dir,
+            algo_class, algo_name, args.epochs, save_dir,
             display_mgr, args.sims,
         )
     else:
-        log_path = os.path.join(args.save_dir, "training_log.json")
+        log_path = os.path.join(save_dir, "training_log.json")
         if os.path.exists(log_path):
             with open(log_path) as f:
                 training_log = json.load(f)
 
-    # Phase 2
+    # Phase 2: Evaluate
     eval_metrics = run_evaluations(
-        algo_class, args.epochs, args.save_dir,
+        algo_class, algo_name, args.epochs, save_dir,
         display_mgr, args.eval_episodes,
     )
 
-    # Phase 3
+    # Phase 3: Plot
     print("\n" + "=" * 65)
     print("  PHASE 3: Generating plots")
     print("=" * 65)
-    generate_plots(args.save_dir, training_log, eval_metrics)
+    generate_plots(algo_name, save_dir, training_log, eval_metrics)
 
     print("\n" + "=" * 65)
     print("  EXPERIMENT COMPLETE")
     print("=" * 65)
-    print(f"  Output: {args.save_dir}/")
+    print(f"  Algorithm:     {algo_name}")
+    print(f"  Output:        {save_dir}/")
     print(f"    checkpoints/     Model files at each epoch")
     print(f"    results/         eval_metrics.json")
     print(f"    trajectories/    Agent position logs")
