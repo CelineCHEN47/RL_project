@@ -20,6 +20,7 @@ NUM_AGENTS = 4
 
 # RL
 DECISION_INTERVAL = 4  # agents decide every N frames
+DUAL_ROLE_ENABLED = True  # separate tagger/runner models
 
 # Colors
 COLOR_BG = (30, 30, 40)

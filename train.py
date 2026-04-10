@@ -2,7 +2,7 @@
 """Universal training script for Tag RL algorithms.
 
 Usage examples:
-    # Train PPO for 100 rounds (episodes), 1 simulation
+    # Train PPO for 100 rounds, 1 simulation
     python train.py --algorithm PPO --rounds 100
 
     # Train Q-Learning with 4 parallel simulations, 500 rounds
@@ -11,8 +11,8 @@ Usage examples:
     # Train with custom steps per round and save path
     python train.py --algorithm PPO --rounds 200 --steps-per-round 2000 --save-dir models/experiment1
 
-    # Resume training from a saved model
-    python train.py --algorithm PPO --rounds 100 --load models/ppo_latest.pt
+    # Resume training from saved models
+    python train.py --algorithm PPO --rounds 100 --load saved_models/ppo_model.pt
 
     # List available algorithms
     python train.py --list-algorithms
@@ -32,6 +32,7 @@ pygame.display.set_mode((1, 1))
 
 import config
 from game.simulation import HeadlessSimulation
+from rl.dual_role import DualRoleAlgorithm
 
 
 def get_algo_class(algo_name: str):
@@ -57,29 +58,36 @@ def train(args):
     os.makedirs(args.save_dir, exist_ok=True)
     model_path = get_model_path(args.save_dir, args.algorithm)
 
-    # Create shared algorithm instances (all sims share the same models)
-    # so learning accumulates across parallel simulations
-    sample_sim = HeadlessSimulation(algo_class)
-    num_agents = len(sample_sim.agents)
-    shared_algorithms = [agent.algorithm for agent in sample_sim.agents]
-    del sample_sim
+    # Create first simulation to extract shared models
+    first_sim = HeadlessSimulation(algo_class)
+    shared_tagger, shared_runner = first_sim.get_shared_algos()
 
-    # Load existing model if requested
-    if args.load:
+    # Load existing models if requested
+    if args.load and config.DUAL_ROLE_ENABLED:
+        print(f"Loading models from: {args.load}")
+        # DualRoleAlgorithm.load handles _tagger/_runner paths
+        first_sim.agents[0].algorithm.load(args.load)
+    elif args.load:
         print(f"Loading model from: {args.load}")
-        for algo in shared_algorithms:
-            algo.load(args.load)
+        for agent in first_sim.agents:
+            agent.algorithm.load(args.load)
 
-    # Create parallel simulations sharing the same algorithm instances
-    sims = []
-    for i in range(args.sims):
-        sim = HeadlessSimulation(algo_class, shared_algorithms=shared_algorithms)
+    # Create parallel simulations sharing the same model weights
+    sims = [first_sim]
+    for _ in range(args.sims - 1):
+        sim = HeadlessSimulation(algo_class,
+                                 shared_tagger=shared_tagger,
+                                 shared_runner=shared_runner)
         sims.append(sim)
+
+    num_agents = len(first_sim.agents)
+    role_mode = "Dual (tagger + runner)" if config.DUAL_ROLE_ENABLED else "Single"
 
     print("=" * 60)
     print(f"  TAG RL Training")
     print("=" * 60)
     print(f"  Algorithm:        {args.algorithm}")
+    print(f"  Role mode:        {role_mode}")
     print(f"  Rounds:           {args.rounds}")
     print(f"  Steps/round:      {args.steps_per_round}")
     print(f"  Parallel sims:    {args.sims}")
@@ -97,12 +105,10 @@ def train(args):
         round_start = time.time()
         round_tags = 0
 
-        # Reset all simulations for new round
         for sim in sims:
             sim.reset()
             sim.total_tags = 0
 
-        # Run steps
         for step in range(args.steps_per_round):
             for sim in sims:
                 tag_event = sim.step()
@@ -114,7 +120,6 @@ def train(args):
         round_time = time.time() - round_start
         steps_per_sec = (args.steps_per_round * args.sims) / max(round_time, 0.001)
 
-        # Progress report
         if round_num % args.log_interval == 0 or round_num == 1:
             elapsed = time.time() - training_start
             print(f"  Round {round_num:>5}/{args.rounds}  |  "
@@ -123,15 +128,12 @@ def train(args):
                   f"Steps/sec: {steps_per_sec:>8,.0f}  |  "
                   f"Elapsed: {elapsed:>6.1f}s")
 
-        # Save checkpoint periodically
         if round_num % args.save_interval == 0:
-            for algo in shared_algorithms:
-                algo.save(model_path)
-            print(f"  >> Checkpoint saved to {model_path}")
+            first_sim.agents[0].algorithm.save(model_path)
+            print(f"  >> Checkpoint saved")
 
     # Final save
-    for algo in shared_algorithms:
-        algo.save(model_path)
+    first_sim.agents[0].algorithm.save(model_path)
 
     total_time = time.time() - training_start
     print()
@@ -140,7 +142,13 @@ def train(args):
     print(f"  Total time:    {total_time:.1f}s")
     print(f"  Total steps:   {total_steps:,}")
     print(f"  Total tags:    {total_tags:,}")
-    print(f"  Model saved:   {model_path}")
+    if config.DUAL_ROLE_ENABLED:
+        from rl.dual_role import _dual_paths
+        tp, rp = _dual_paths(model_path)
+        print(f"  Tagger model:  {tp}")
+        print(f"  Runner model:  {rp}")
+    else:
+        print(f"  Model saved:   {model_path}")
     print("=" * 60)
 
 

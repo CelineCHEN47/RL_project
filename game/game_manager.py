@@ -13,6 +13,7 @@ from entities.movable_object import MovableObject
 from game.tag_logic import TagLogic
 from physics.collision import resolve_entity_walls, resolve_entity_crates
 from rl.environment import TagEnvironment
+from rl.dual_role import DualRoleAlgorithm
 from rendering.renderer import Renderer
 from ui.menu import Menu
 from ui.hud import HUD
@@ -37,7 +38,6 @@ class GameManager:
         self.renderer = Renderer(screen)
         self.hud = HUD(screen)
 
-        # Game objects (initialized when game starts)
         self.level = None
         self.entities = []
         self.agents = []
@@ -58,7 +58,6 @@ class GameManager:
         return
 
     def _menu_loop(self) -> bool:
-        """Handle menu. Returns False to quit."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -79,7 +78,6 @@ class GameManager:
         return True
 
     def _game_loop(self) -> bool:
-        """Handle one frame of gameplay. Returns False to quit."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -111,37 +109,47 @@ class GameManager:
         random.shuffle(spawn_points)
         entity_id = 0
 
+        # Track shared inner algos for dual-role weight sharing
+        shared_tagger = None
+        shared_runner = None
+
         if self.mode == config.GameMode.PLAYER_MODE:
-            # Random spawn for the player
             if spawn_points:
                 px, py = spawn_points.pop(0)
                 self.player = Player(px, py, entity_id)
                 self.entities.append(self.player)
                 entity_id += 1
 
-            # Remaining spawns are agents
             for sp in spawn_points:
-                algorithm = algo_class()
+                algorithm = self._create_algorithm(algo_class,
+                                                   shared_tagger, shared_runner)
+                if shared_tagger is None and isinstance(algorithm, DualRoleAlgorithm):
+                    shared_tagger = algorithm.tagger_algo
+                    shared_runner = algorithm.runner_algo
+
                 agent = Agent(sp[0], sp[1], entity_id, algorithm)
                 self.agents.append(agent)
                 self.entities.append(agent)
                 entity_id += 1
         else:
-            # Simulation mode: all agents
             self.player = None
             for sp in spawn_points:
-                algorithm = algo_class()
+                algorithm = self._create_algorithm(algo_class,
+                                                   shared_tagger, shared_runner)
+                if shared_tagger is None and isinstance(algorithm, DualRoleAlgorithm):
+                    shared_tagger = algorithm.tagger_algo
+                    shared_runner = algorithm.runner_algo
+
                 agent = Agent(sp[0], sp[1], entity_id, algorithm)
                 self.agents.append(agent)
                 self.entities.append(agent)
                 entity_id += 1
 
         # Load trained model if using pre-trained mode
-        if self.train_mode == config.TrainMode.USE_TRAINED:
+        if self.train_mode == config.TrainMode.USE_TRAINED and self.agents:
             model_path = _get_model_path(self.selected_algorithm)
-            if os.path.exists(model_path):
-                for agent in self.agents:
-                    agent.algorithm.load(model_path)
+            # DualRoleAlgorithm.load handles _tagger/_runner paths automatically
+            self.agents[0].algorithm.load(model_path)
 
         # Spawn crates
         for cp in self.level.crate_spawns:
@@ -153,15 +161,21 @@ class GameManager:
             tagger = random.choice(self.entities)
             self.tag_logic.set_tagger(tagger.entity_id)
 
-        # Initialize RL environment
         self.rl_env = TagEnvironment(self.level, self.entities,
                                      self.movable_objects)
+
+    def _create_algorithm(self, algo_class, shared_tagger, shared_runner):
+        """Create an algorithm instance, dual-role if enabled."""
+        if config.DUAL_ROLE_ENABLED:
+            return DualRoleAlgorithm(algo_class,
+                                    shared_tagger=shared_tagger,
+                                    shared_runner=shared_runner)
+        return algo_class()
 
     def _update(self):
         """Update game state for one frame."""
         is_training = (self.train_mode == config.TrainMode.TRAIN_LIVE)
 
-        # 1. Gather actions
         keys = pygame.key.get_pressed()
         if self.player:
             self.player.handle_input(keys)
@@ -170,7 +184,6 @@ class GameManager:
             obs = self.rl_env.get_observation(agent)
             agent.decide_action(obs)
 
-        # 2. Apply movement and resolve collisions
         for entity in self.entities:
             entity.apply_velocity()
             resolve_entity_walls(entity, self.level.wall_rects)
@@ -179,10 +192,8 @@ class GameManager:
             resolve_entity_crates(entity, self.movable_objects,
                                   self.level.wall_rects)
 
-        # 3. Check tag
         tag_event = self.tag_logic.update()
 
-        # 3b. Tag particles
         if tag_event:
             tagged_entity = None
             for e in self.entities:
@@ -192,10 +203,8 @@ class GameManager:
             if tagged_entity:
                 self.renderer.emit_tag_particles(tagged_entity.x, tagged_entity.y)
 
-        # 4. Update particles
         self.renderer.update_particles()
 
-        # 5. RL feedback (only if training)
         if is_training:
             rewards = self.rl_env.get_all_rewards(tag_event)
             for agent in self.agents:
@@ -211,8 +220,6 @@ class GameManager:
                         agent.algorithm.reset()
 
     def _render(self):
-        """Render the game."""
-        # Camera follows player in player mode, or tagger in sim mode
         if self.player:
             self.renderer.set_camera(self.player.x, self.player.y)
         elif self.entities:

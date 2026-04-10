@@ -14,18 +14,18 @@ from entities.movable_object import MovableObject
 from game.tag_logic import TagLogic
 from physics.collision import resolve_entity_walls, resolve_entity_crates
 from rl.environment import TagEnvironment
+from rl.dual_role import DualRoleAlgorithm
 
 
 class HeadlessSimulation:
     """One instance of the tag game running without rendering."""
 
-    def __init__(self, algo_class, shared_algorithms: list | None = None):
+    def __init__(self, algo_class, shared_tagger=None, shared_runner=None):
         """
         Args:
             algo_class: The RL algorithm class to instantiate.
-            shared_algorithms: If provided, use these algorithm instances
-                instead of creating new ones. This lets multiple simulations
-                share the same model weights.
+            shared_tagger: If provided, share tagger model weights with this.
+            shared_runner: If provided, share runner model weights with this.
         """
         self.level = Level("level_01.txt")
         self.entities = []
@@ -36,10 +36,17 @@ class HeadlessSimulation:
         random.shuffle(spawn_points)
 
         for i, sp in enumerate(spawn_points):
-            if shared_algorithms and i < len(shared_algorithms):
-                algorithm = shared_algorithms[i]
+            if config.DUAL_ROLE_ENABLED:
+                algorithm = DualRoleAlgorithm(algo_class,
+                                              shared_tagger=shared_tagger,
+                                              shared_runner=shared_runner)
+                # After first agent, share weights with it
+                if i == 0 and shared_tagger is None:
+                    shared_tagger = algorithm.tagger_algo
+                    shared_runner = algorithm.runner_algo
             else:
                 algorithm = algo_class()
+
             agent = Agent(sp[0], sp[1], i, algorithm)
             self.agents.append(agent)
             self.entities.append(agent)
@@ -56,14 +63,18 @@ class HeadlessSimulation:
         self.total_tags = 0
         self.steps = 0
 
+    def get_shared_algos(self):
+        """Return (shared_tagger, shared_runner) from the first agent."""
+        if self.agents and isinstance(self.agents[0].algorithm, DualRoleAlgorithm):
+            return self.agents[0].algorithm.tagger_algo, self.agents[0].algorithm.runner_algo
+        return None, None
+
     def step(self) -> dict | None:
         """Run one game step. Returns tag_event if a tag occurred."""
-        # 1. Agent decisions
         for agent in self.agents:
             obs = self.rl_env.get_observation(agent)
             agent.decide_action(obs)
 
-        # 2. Movement + collision
         for entity in self.entities:
             entity.apply_velocity()
             resolve_entity_walls(entity, self.level.wall_rects)
@@ -72,10 +83,8 @@ class HeadlessSimulation:
             resolve_entity_crates(entity, self.movable_objects,
                                   self.level.wall_rects)
 
-        # 3. Tag check
         tag_event = self.tag_logic.update()
 
-        # 4. RL feedback
         rewards = self.rl_env.get_all_rewards(tag_event)
         for agent in self.agents:
             next_obs = self.rl_env.get_observation(agent)
@@ -108,15 +117,12 @@ class HeadlessSimulation:
                 agent.rect.x = int(agent.x) - half
                 agent.rect.y = int(agent.y) - half
 
-        # Reset crates
         self.movable_objects.clear()
         for cp in self.level.crate_spawns:
             self.movable_objects.append(MovableObject(cp[0], cp[1]))
 
-        # New random tagger
         tagger = random.choice(self.entities)
         self.tag_logic.set_tagger(tagger.entity_id)
 
-        # Rebuild environment with fresh crates
         self.rl_env = TagEnvironment(self.level, self.entities,
                                      self.movable_objects)

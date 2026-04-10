@@ -8,10 +8,16 @@ from ui.button import Button
 
 
 def _model_exists(algo_name: str) -> bool:
-    """Check if a trained model file exists for the given algorithm."""
+    """Check if trained model files exist for the given algorithm."""
     safe_name = algo_name.lower().replace("-", "_").replace(" ", "_")
-    path = os.path.join(config.DEFAULT_MODEL_DIR, f"{safe_name}_model.pt")
-    return os.path.exists(path)
+    base_path = os.path.join(config.DEFAULT_MODEL_DIR, f"{safe_name}_model.pt")
+
+    if config.DUAL_ROLE_ENABLED:
+        # Check for dual-role model files (_tagger + _runner)
+        from rl.dual_role import dual_model_exists
+        return dual_model_exists(base_path)
+
+    return os.path.exists(base_path)
 
 
 class Menu:
