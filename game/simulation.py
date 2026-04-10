@@ -27,7 +27,7 @@ class HeadlessSimulation:
             shared_tagger: If provided, share tagger model weights with this.
             shared_runner: If provided, share runner model weights with this.
         """
-        self.level = Level("level_01.txt")
+        self.level = Level("level_small.txt")
         self.entities = []
         self.agents = []
         self.movable_objects = []

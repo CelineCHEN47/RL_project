@@ -95,7 +95,7 @@ class GameManager:
     def _init_game(self):
         """Set up a new game session."""
         self.tick = 0
-        self.level = Level("level_01.txt")
+        self.level = Level("level_small.txt")
         self.entities = []
         self.agents = []
         self.movable_objects = []
