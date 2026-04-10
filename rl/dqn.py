@@ -131,10 +131,10 @@ class DQN(BaseRLAlgorithm):
     """
 
     def __init__(self):
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.q_net      = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM)
-        self.target_net = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM)
+        self.q_net      = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(self.device)
+        self.target_net = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(self.device)
 
         # Sync target = online at init; freeze target gradients
         self.target_net.load_state_dict(self.q_net.state_dict())
@@ -187,7 +187,7 @@ class DQN(BaseRLAlgorithm):
             else:
                 features.extend([0.0, 0.0, 0.0, 0.0])
 
-        return torch.tensor(features, dtype=torch.float32)
+        return torch.tensor(features, dtype=torch.float32, device=self.device)
 
     # ------------------------------------------------------------------
     # Epsilon schedule

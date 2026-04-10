@@ -161,8 +161,8 @@ class RolloutBuffer:
 
 class PPO(BaseRLAlgorithm):
     def __init__(self):
-        self.device = torch.device("cpu")
-        self.network = ActorCritic(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.network = ActorCritic(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(self.device)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=LEARNING_RATE)
         self.buffer = RolloutBuffer()
         self.total_steps = 0
@@ -202,7 +202,7 @@ class PPO(BaseRLAlgorithm):
             else:
                 features.extend([0.0, 0.0, 0.0, 0.0])
 
-        return torch.tensor(features, dtype=torch.float32)
+        return torch.tensor(features, dtype=torch.float32, device=self.device)
 
     @torch.no_grad()
     def select_action(self, observation: dict) -> int:
