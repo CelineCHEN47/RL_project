@@ -20,13 +20,24 @@ class Renderer:
         self.textures = TextureCache()
         self.sprites = SpriteCache(radius=Entity.ENTITY_SIZE // 2)
         self.particles = ParticleSystem()
-        self.label_font = pygame.font.SysFont("Arial", 11, bold=True)
+        self.label_font = self._safe_sys_font("Arial", 11, bold=True)
+        self.badge_font = self._safe_sys_font("Arial", 13, bold=True)
 
         # Pre-render the shadow surface for entities
         shadow_size = Entity.ENTITY_SIZE + 8
         self.entity_shadow = pygame.Surface((shadow_size, shadow_size), pygame.SRCALPHA)
         pygame.draw.ellipse(self.entity_shadow, (0, 0, 0, 50),
                             (0, shadow_size // 4, shadow_size, shadow_size // 2))
+
+    @staticmethod
+    def _safe_sys_font(name: str, size: int, bold: bool = False) -> pygame.font.Font:
+        """Prefer system font but fall back to pygame default if discovery fails."""
+        try:
+            return pygame.font.SysFont(name, size, bold=bold)
+        except Exception:
+            font = pygame.font.Font(None, size)
+            font.set_bold(bold)
+            return font
 
     def set_camera(self, target_x: float, target_y: float):
         """Center camera on a target position."""
@@ -131,8 +142,7 @@ class Renderer:
 
             # Tagger "IT!" badge
             if entity.is_tagger:
-                badge_font = pygame.font.SysFont("Arial", 13, bold=True)
-                badge = badge_font.render("IT!", True, (255, 255, 200))
+                badge = self.badge_font.render("IT!", True, (255, 255, 200))
                 badge_rect = badge.get_rect(centerx=sx,
                                             top=sy + Entity.ENTITY_SIZE // 2 + 4)
                 badge_bg = badge_rect.inflate(8, 4)

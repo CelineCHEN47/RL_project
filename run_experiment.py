@@ -40,13 +40,13 @@ import time
 # ======================================================================
 # Default experiment configuration
 # ======================================================================
-ALGORITHM_NAME   = "DQN"
+ALGORITHM_NAME   = "SARSA"
 DEFAULT_EPOCHS   = [10, 50, 100, 200, 500, 1000]
 STEPS_PER_ROUND  = 1000
 PARALLEL_SIMS    = 2
 EVAL_EPISODES    = 20
 EVAL_STEPS       = 2000
-SAVE_DIR         = "experiments/dqn"
+SAVE_DIR         = "experiments/sarsa"
 LOG_INTERVAL     = 5
 
 
@@ -114,8 +114,19 @@ class DisplayManager:
         self.pygame = pygame
         self.tick = 0
 
-        self.font = pygame.font.SysFont("Consolas", 14)
+        self.font = self._safe_sys_font("Consolas", 14)
         self.hud_lines: list[str] = []
+
+    @staticmethod
+    def _safe_sys_font(name: str, size: int, bold: bool = False):
+        """Prefer system font but fall back to pygame default if discovery fails."""
+        import pygame
+        try:
+            return pygame.font.SysFont(name, size, bold=bold)
+        except Exception:
+            font = pygame.font.Font(None, size)
+            font.set_bold(bold)
+            return font
 
     def set_hud(self, lines: list[str]):
         """Set overlay text lines shown in top-left corner."""
