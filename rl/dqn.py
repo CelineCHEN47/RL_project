@@ -187,7 +187,7 @@ class DQN(BaseRLAlgorithm):
             else:
                 features.extend([0.0, 0.0, 0.0, 0.0])
 
-        return torch.tensor(features, dtype=torch.float32, device=self.device)
+        return torch.tensor(features, dtype=torch.float32).to(self.device)
 
     # ------------------------------------------------------------------
     # Epsilon schedule
@@ -241,6 +241,13 @@ class DQN(BaseRLAlgorithm):
         states, actions, rewards, next_states, dones = \
             self.replay_buffer.sample(BATCH_SIZE)
 
+        # 加这一行
+        states      = states.to(self.device)
+        actions     = actions.to(self.device)
+        rewards     = rewards.to(self.device)
+        next_states = next_states.to(self.device)
+        dones       = dones.to(self.device)
+        
         q_values = self.q_net(states)
         q_sa = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
 
