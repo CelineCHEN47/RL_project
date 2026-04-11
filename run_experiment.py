@@ -44,7 +44,7 @@ DEFAULT_EPOCHS   = [10, 50, 100, 200, 500, 1000]
 STEPS_PER_ROUND  = 1000
 PARALLEL_SIMS    = 2
 EVAL_EPISODES    = 20
-EVAL_STEPS       = 2000
+EVAL_STEPS       = 1000
 LOG_INTERVAL     = 5
 
 
@@ -560,11 +560,11 @@ def main():
     parser.add_argument("--epochs", nargs="+", type=int,
                         default=DEFAULT_EPOCHS,
                         help=f"Epoch milestones (default: {DEFAULT_EPOCHS})")
-    parser.add_argument("--eval-only", action="store_true",
+    parser.add_argument("--eval_only", action="store_true",
                         help="Skip training; evaluate existing checkpoints")
-    parser.add_argument("--save-dir", type=str, default=None,
+    parser.add_argument("--save_dir", type=str, default=None,
                         help="Output directory (default: experiments/<algo>)")
-    parser.add_argument("--eval-episodes", type=int, default=EVAL_EPISODES,
+    parser.add_argument("--eval_episodes", type=int, default=EVAL_EPISODES,
                         help=f"Episodes per eval (default: {EVAL_EPISODES})")
     parser.add_argument("--sims", type=int, default=PARALLEL_SIMS,
                         help=f"Parallel sims for training (default: "
