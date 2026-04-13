@@ -125,56 +125,91 @@ class TagEnvironment:
         }
 
     def compute_reward(self, entity: Entity, tag_event: dict | None) -> float:
-        """Compute reward for a single entity this frame.
+        """Optimized reward function.
 
-        Reward design:
-            Tagger:
-                +20.0  for successful tag
-                -time_penalty: starts at -0.02, grows to -0.2 over 500 steps
-                +distance_reward: closer to nearest runner = positive
-            Runner:
-                -20.0  for being tagged
-                +time_bonus: starts at +0.02, grows to +0.2 over 500 steps
-                +distance_reward: farther from tagger = positive
+        Key design changes vs original:
+        1. Distance CHANGE reward (delta-based) instead of absolute distance
+        → prevents "stand still at comfortable distance" exploits
+        2. Movement bonus for tagger → encourages active pursuit
+        3. Capped, gentler time scaling → prevents reward saturation
+        4. Larger tag event rewards relative to per-step rewards
+        → makes tag events the dominant learning signal
+        5. Wall penalty → discourages corner camping
         """
         reward = 0.0
 
-        # Scaling factor: ramps from 1.0 to 10.0 over 500 steps since last tag
-        # This makes tagger increasingly desperate and rewards runners more
-        time_scale = min(1.0 + self.steps_since_tag / 55.0, 10.0)
+        # --- Milder time scaling: ramps from 1.0 to 3.0 over 300 steps ---
+        time_scale = min(1.0 + self.steps_since_tag / 300.0, 3.0)
 
         if entity.is_tagger:
-            # Escalating time penalty (gets worse the longer you go without tagging)
-            reward -= 0.02 * time_scale
-
+            # 1. Tag success: dominant reward signal
             if tag_event and tag_event.get("tagger_id") == entity.entity_id:
-                reward += 20.0
-            else:
-                min_dist = float("inf")
-                for other in self.entities:
-                    if other.entity_id == entity.entity_id:
-                        continue
-                    if not other.is_tagger:
-                        d = entity.distance_to(other)
-                        min_dist = min(min_dist, d)
-                if min_dist < float("inf"):
-                    max_dist = max(self.level_w, self.level_h)
-                    reward += 0.5 * (1.0 - min_dist / max_dist)
-        else:
-            # Escalating survival bonus (grows the longer you stay alive)
-            reward += 0.02 * time_scale
+                reward += 50.0
+                return reward  # no need for shaping on tag frame
 
+            # 2. Time penalty (mild, escalating)
+            reward -= 0.01 * time_scale
+
+            # 3. Distance CHANGE to nearest runner (delta-based)
+            #    Reward getting closer, punish getting farther
+            min_dist = float("inf")
+            for other in self.entities:
+                if other.entity_id == entity.entity_id or other.is_tagger:
+                    continue
+                d = entity.distance_to(other)
+                min_dist = min(min_dist, d)
+
+            if min_dist < float("inf"):
+                # Store last distance for delta computation
+                prev_dist = getattr(entity, '_prev_tagger_dist', min_dist)
+                delta = prev_dist - min_dist  # positive = getting closer
+                max_dist = max(self.level_w, self.level_h)
+                reward += 1.0 * (delta / max_dist) * time_scale
+                entity._prev_tagger_dist = min_dist
+
+            # 4. Small movement bonus (prevent standing still)
+            speed = math.sqrt(entity.vx ** 2 + entity.vy ** 2)
+            if speed > 0.5:
+                reward += 0.005
+
+        else:  # Runner
+            # 1. Got tagged: dominant punishment
             if tag_event and tag_event.get("tagged_id") == entity.entity_id:
-                reward -= 20.0
-            else:
-                for other in self.entities:
-                    if other.is_tagger:
-                        d = entity.distance_to(other)
-                        max_dist = max(self.level_w, self.level_h)
-                        reward += 0.3 * (d / max_dist)
-                        break
+                reward -= 50.0
+                return reward
+
+            # 2. Survival bonus (mild, escalating)
+            reward += 0.01 * time_scale
+
+            # 3. Distance CHANGE from tagger (delta-based)
+            for other in self.entities:
+                if other.is_tagger:
+                    d = entity.distance_to(other)
+                    prev_dist = getattr(entity, '_prev_runner_dist', d)
+                    delta = d - prev_dist  # positive = getting farther
+                    max_dist = max(self.level_w, self.level_h)
+                    reward += 0.5 * (delta / max_dist) * time_scale
+                    entity._prev_runner_dist = d
+                    break
+
+            # 4. Proximity danger penalty (close to tagger = bad)
+            #    Only activates within a danger zone, not map-wide
+            for other in self.entities:
+                if other.is_tagger:
+                    d = entity.distance_to(other)
+                    danger_zone = config.TAG_RADIUS * 4  # ~96 pixels
+                    if d < danger_zone:
+                        reward -= 0.1 * (1.0 - d / danger_zone)
+                    break
+
+            # 5. Wall proximity penalty (anti-corner-camping)
+            wall_rays = self._raycast_walls(entity)
+            num_close_walls = sum(1 for r in wall_rays if r < 0.2)
+            if num_close_walls >= 3:
+                reward -= 0.02 * num_close_walls
 
         return reward
+
 
     def get_all_rewards(self, tag_event: dict | None) -> dict[int, float]:
         """Return {entity_id: reward} for all entities this frame."""

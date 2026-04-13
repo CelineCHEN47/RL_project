@@ -116,6 +116,10 @@ class HeadlessSimulation:
                 half = agent.ENTITY_SIZE // 2
                 agent.rect.x = int(agent.x) - half
                 agent.rect.y = int(agent.y) - half
+            # 清除 delta-based reward 的上一步距离缓存
+            for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
+                if hasattr(agent, attr):
+                    delattr(agent, attr)
 
         self.movable_objects.clear()
         for cp in self.level.crate_spawns:
