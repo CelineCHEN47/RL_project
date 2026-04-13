@@ -32,6 +32,7 @@ import pygame
 
 from gridworld.env import TagGridWorld, GRID_SIZE, NUM_ACTIONS
 from gridworld.tabular_agent import QLearningAgent, SARSAAgent, RandomAgent
+from gridworld.recorder import VideoRecorder
 from rendering.textures import generate_floor_texture, generate_wall_texture
 from rendering.sprites import generate_character_sprite, generate_tagger_aura_frame
 from rendering.particles import ParticleSystem
@@ -255,7 +256,7 @@ class GridWorldRenderer:
 # ======================================================================
 def train_phase(screen, clock, renderer: GridWorldRenderer, env, learner,
                 opponent, role: str, algo_name: str, num_episodes: int,
-                phase_label: str):
+                phase_label: str, recorder: VideoRecorder | None = None):
     """Train one role against a fixed opponent with live visualization."""
     grid_w = GRID_SIZE * CELL_SIZE
     offset_x = 15
@@ -356,6 +357,8 @@ def train_phase(screen, clock, renderer: GridWorldRenderer, env, learner,
                 "last_result": last_result,
             })
             pygame.display.flip()
+            if recorder:
+                recorder.capture(screen)
 
             if ep < num_episodes * 0.8:
                 clock.tick(0)
@@ -381,7 +384,7 @@ def train_phase(screen, clock, renderer: GridWorldRenderer, env, learner,
 # ======================================================================
 def watch_phase(screen, clock, renderer: GridWorldRenderer, env,
                 tagger_agent, runner_agent, algo_name: str,
-                num_episodes: int = 20):
+                num_episodes: int = 20, recorder: VideoRecorder | None = None):
     """Watch trained agents play at slow speed."""
     offset_x = 15
     offset_y = (screen.get_height() - GRID_SIZE * CELL_SIZE) // 2
@@ -432,6 +435,8 @@ def watch_phase(screen, clock, renderer: GridWorldRenderer, env,
                 "last_result": last_result,
             })
             pygame.display.flip()
+            if recorder:
+                recorder.capture(screen)
             clock.tick(FPS_WATCH)
 
             if done:
@@ -460,6 +465,8 @@ def watch_phase(screen, clock, renderer: GridWorldRenderer, env,
                 "last_result": last_result,
             })
             pygame.display.flip()
+            if recorder:
+                recorder.capture(screen)
             clock.tick(FPS_WATCH)
 
         # Episode result
@@ -488,6 +495,8 @@ def main():
                         help="Train only, no watch phase")
     parser.add_argument("--watch-episodes", type=int, default=20,
                         help="Episodes to watch (default: 20)")
+    parser.add_argument("--record", action="store_true",
+                        help="Record training & watch phases to MP4 videos")
     args = parser.parse_args()
 
     # Init pygame
@@ -514,6 +523,7 @@ def main():
     runner_path = os.path.join(SAVE_DIR, f"{args.algo}_runner.pkl")
 
     env = TagGridWorld()
+    video_dir = os.path.join("gridworld", "videos")
 
     if not args.watch_only:
         # ---- Phase 1: Train tagger vs random runner ----
@@ -521,17 +531,29 @@ def main():
         print(f"  Phase 1: Training TAGGER ({algo_name})")
         print(f"  Opponent: random runner")
         print(f"  Episodes: {args.episodes}")
+        if args.record:
+            print(f"  Recording to: {video_dir}/")
         print(f"{'='*50}")
 
         tagger_agent = make_agent()
         random_runner = RandomAgent()
+
+        rec1 = None
+        if args.record:
+            rec1 = VideoRecorder(
+                os.path.join(video_dir, f"{args.algo}_phase1_tagger_training.mp4"),
+                screen, fps=30, sample_every=5)
 
         catches, timeouts = train_phase(
             screen, clock, renderer, env, tagger_agent, random_runner,
             role="tagger", algo_name=algo_name,
             num_episodes=args.episodes,
             phase_label="Phase 1: Train TAGGER vs random",
+            recorder=rec1,
         )
+        if rec1:
+            rec1.finish()
+
         tagger_agent.save(tagger_path)
         total = catches + timeouts
         print(f"  Tagger trained: {catches} catches, {timeouts} timeouts "
@@ -549,12 +571,22 @@ def main():
         runner_agent = make_agent()
         tagger_agent.epsilon = 0.0
 
+        rec2 = None
+        if args.record:
+            rec2 = VideoRecorder(
+                os.path.join(video_dir, f"{args.algo}_phase2_runner_training.mp4"),
+                screen, fps=30, sample_every=5)
+
         catches, timeouts = train_phase(
             screen, clock, renderer, env, runner_agent, tagger_agent,
             role="runner", algo_name=algo_name,
             num_episodes=args.episodes,
             phase_label="Phase 2: Train RUNNER vs trained tagger",
+            recorder=rec2,
         )
+        if rec2:
+            rec2.finish()
+
         runner_agent.save(runner_path)
         total = catches + timeouts
         survival_rate = timeouts / max(total, 1) * 100
@@ -582,8 +614,17 @@ def main():
         tagger_agent.epsilon = 0.0
         runner_agent.epsilon = 0.0
 
+        rec3 = None
+        if args.record:
+            rec3 = VideoRecorder(
+                os.path.join(video_dir, f"{args.algo}_phase3_watch.mp4"),
+                screen, fps=FPS_WATCH)
+
         watch_phase(screen, clock, renderer, env, tagger_agent, runner_agent,
-                    algo_name, args.watch_episodes)
+                    algo_name, args.watch_episodes, recorder=rec3)
+
+        if rec3:
+            rec3.finish()
 
     pygame.quit()
     print("\nDone.")
