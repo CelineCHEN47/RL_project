@@ -1,0 +1,40 @@
+[
+  {
+    "epoch": 5,
+    "tagger": {
+      "role": "tagger",
+      "epoch": 5,
+      "num_episodes": 3,
+      "mean_tags": 0.0,
+      "std_tags": 0.0,
+      "mean_steps_between_tags": 1000.0
+    },
+    "runner": {
+      "role": "runner",
+      "epoch": 5,
+      "num_episodes": 3,
+      "mean_tags": 0.0,
+      "std_tags": 0.0,
+      "mean_steps_between_tags": 1000.0
+    }
+  },
+  {
+    "epoch": 10,
+    "tagger": {
+      "role": "tagger",
+      "epoch": 10,
+      "num_episodes": 3,
+      "mean_tags": 0.0,
+      "std_tags": 0.0,
+      "mean_steps_between_tags": 1000.0
+    },
+    "runner": {
+      "role": "runner",
+      "epoch": 10,
+      "num_episodes": 3,
+      "mean_tags": 0.0,
+      "std_tags": 0.0,
+      "mean_steps_between_tags": 1000.0
+    }
+  }
+]
