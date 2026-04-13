@@ -436,10 +436,187 @@ def run_evaluations(algo_class, algo_name: str, epochs: list[int],
 
 
 # ======================================================================
+# Phase 2b: Isolated Role Evaluation
+# ======================================================================
+def evaluate_role_isolated(algo_class, algo_name: str, ckpt_path: str,
+                           role: str, num_episodes: int,
+                           steps_per_episode: int,
+                           display_mgr: DisplayManager | None,
+                           epoch_label: str = ""):
+    """Evaluate one role in isolation.
+
+    Args:
+        role: "tagger" or "runner"
+            - "tagger": trained tagger vs untrained runners
+              Metric: more tags = better tagger
+            - "runner": trained runners vs untrained tagger
+              Metric: fewer tags = better runners
+    """
+    from game.simulation import HeadlessSimulation
+    from rl.dual_role import DualRoleAlgorithm
+    import numpy as np
+
+    sim = HeadlessSimulation(algo_class)
+    num_agents = len(sim.agents)
+
+    # Load only the role being tested
+    for agent in sim.agents:
+        if isinstance(agent.algorithm, DualRoleAlgorithm):
+            if role == "tagger":
+                agent.algorithm.load_tagger_only(ckpt_path)
+            else:
+                agent.algorithm.load_runner_only(ckpt_path)
+
+    # No learning during evaluation
+    def _no_learn(*_args, **_kwargs):
+        return None
+    for agent in sim.agents:
+        agent.learn = _no_learn
+
+    episode_metrics = []
+
+    for ep in range(num_episodes):
+        sim.reset()
+        ep_tags = 0
+        steps_between_tags = []
+        steps_since_last = 0
+
+        skip = False
+        for step in range(steps_per_episode):
+            tag_event = sim.step()
+            steps_since_last += 1
+            if tag_event:
+                ep_tags += 1
+                steps_between_tags.append(steps_since_last)
+                steps_since_last = 0
+                if display_mgr:
+                    for e in sim.entities:
+                        if e.entity_id == tag_event.get("tagged_id"):
+                            display_mgr.renderer.emit_tag_particles(e.x, e.y)
+
+            if display_mgr:
+                role_label = "TAGGER" if role == "tagger" else "RUNNER"
+                display_mgr.set_hud([
+                    f"ROLE EVAL ({role_label}) — Epoch {epoch_label}  "
+                    f"Ep {ep+1}/{num_episodes}  "
+                    f"Step {step+1}/{steps_per_episode}",
+                    f"Tags: {ep_tags}  |  "
+                    f"Trained: {role_label}, Opponent: untrained",
+                    "ESC = skip",
+                ])
+                if display_mgr.render_sim(sim) == "skip":
+                    skip = True
+                    break
+
+        avg_steps_between = (float(np.mean(steps_between_tags))
+                             if steps_between_tags else float(steps_per_episode))
+        episode_metrics.append({
+            "episode": ep,
+            "tags": ep_tags,
+            "avg_steps_between_tags": avg_steps_between,
+        })
+        if skip:
+            break
+
+    tags_list = [m["tags"] for m in episode_metrics]
+    avg_gaps = [m["avg_steps_between_tags"] for m in episode_metrics]
+
+    return {
+        "role": role,
+        "epoch": epoch_label,
+        "num_episodes": len(episode_metrics),
+        "mean_tags": float(np.mean(tags_list)) if tags_list else 0,
+        "std_tags": float(np.std(tags_list)) if tags_list else 0,
+        "mean_steps_between_tags": float(np.mean(avg_gaps)) if avg_gaps else 0,
+    }
+
+
+def run_role_evaluations(algo_class, algo_name: str, epochs: list[int],
+                         save_dir: str, display_mgr: DisplayManager | None,
+                         eval_episodes: int):
+    """Run isolated tagger and runner evaluations for each checkpoint."""
+    from rl.dual_role import dual_model_exists
+    import config
+
+    if not config.DUAL_ROLE_ENABLED:
+        print("  [SKIP] Role evaluation requires DUAL_ROLE_ENABLED=True")
+        return []
+
+    results_dir = os.path.join(save_dir, "results")
+    os.makedirs(results_dir, exist_ok=True)
+
+    print("=" * 65)
+    print(f"  PHASE 2b: Isolated Role Evaluation ({algo_name})")
+    print(f"  Epochs: {sorted(epochs)}")
+    print(f"  Episodes per test: {eval_episodes}")
+    print(f"  Tests per epoch:")
+    print(f"    - Trained TAGGER vs untrained runners (more tags = better)")
+    print(f"    - Trained RUNNERS vs untrained tagger (fewer tags = better)")
+    print("=" * 65)
+
+    all_role_metrics = []
+
+    for epoch in sorted(epochs):
+        ckpt = checkpoint_path(save_dir, algo_name, epoch)
+        if not dual_model_exists(ckpt):
+            print(f"  [SKIP] No dual checkpoint for epoch {epoch}")
+            continue
+
+        print(f"\n  Epoch {epoch}:")
+
+        # Test 1: Trained tagger vs untrained runners
+        if display_mgr:
+            import pygame
+            pygame.display.set_caption(
+                f"{algo_name} — Tagger Eval Epoch {epoch}")
+
+        tagger_metrics = evaluate_role_isolated(
+            algo_class, algo_name, ckpt, "tagger",
+            eval_episodes, EVAL_STEPS, display_mgr, str(epoch))
+        tagger_metrics["epoch"] = epoch
+
+        print(f"    Trained TAGGER vs random runners: "
+              f"{tagger_metrics['mean_tags']:.1f} "
+              f"± {tagger_metrics['std_tags']:.1f} tags  "
+              f"(avg {tagger_metrics['mean_steps_between_tags']:.0f} "
+              f"steps/tag)")
+
+        # Test 2: Trained runners vs untrained tagger
+        if display_mgr:
+            import pygame
+            pygame.display.set_caption(
+                f"{algo_name} — Runner Eval Epoch {epoch}")
+
+        runner_metrics = evaluate_role_isolated(
+            algo_class, algo_name, ckpt, "runner",
+            eval_episodes, EVAL_STEPS, display_mgr, str(epoch))
+        runner_metrics["epoch"] = epoch
+
+        print(f"    Trained RUNNERS vs random tagger: "
+              f"{runner_metrics['mean_tags']:.1f} "
+              f"± {runner_metrics['std_tags']:.1f} tags  "
+              f"(avg {runner_metrics['mean_steps_between_tags']:.0f} "
+              f"steps/tag)")
+
+        all_role_metrics.append({
+            "epoch": epoch,
+            "tagger": tagger_metrics,
+            "runner": runner_metrics,
+        })
+
+    metrics_path = os.path.join(results_dir, "role_eval_metrics.json")
+    with open(metrics_path, "w") as f:
+        json.dump(all_role_metrics, f, indent=2)
+    print(f"\n  Role metrics saved: {metrics_path}")
+
+    return all_role_metrics
+
+
+# ======================================================================
 # Phase 3: Generate Plots
 # ======================================================================
 def generate_plots(algo_name: str, save_dir: str, training_log: list | None,
-                   eval_metrics: list):
+                   eval_metrics: list, role_metrics: list | None = None):
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -492,6 +669,41 @@ def generate_plots(algo_name: str, save_dir: str, training_log: list | None,
         fig.savefig(os.path.join(plots_dir, "epoch_comparison.png"), dpi=150)
         plt.close(fig)
         print(f"  Saved: {plots_dir}/epoch_comparison.png")
+
+    # --- Role isolation comparison ---
+    if role_metrics:
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(f"{algo_name} — Isolated Role Performance", fontsize=14)
+
+        ep_list = [m["epoch"] for m in role_metrics]
+        x = range(len(ep_list))
+
+        # Tagger performance (more tags = better)
+        tagger_means = [m["tagger"]["mean_tags"] for m in role_metrics]
+        tagger_stds = [m["tagger"]["std_tags"] for m in role_metrics]
+        ax1.bar(x, tagger_means, yerr=tagger_stds, capsize=5,
+                color=(0.85, 0.3, 0.3), edgecolor="black", alpha=0.8)
+        ax1.set_xticks(list(x))
+        ax1.set_xticklabels([f"Epoch\n{e}" for e in ep_list])
+        ax1.set_ylabel("Mean Tags (higher = better tagger)")
+        ax1.set_title("Trained Tagger vs Untrained Runners")
+        ax1.grid(True, axis="y", alpha=0.3)
+
+        # Runner performance (fewer tags = better)
+        runner_means = [m["runner"]["mean_tags"] for m in role_metrics]
+        runner_stds = [m["runner"]["std_tags"] for m in role_metrics]
+        ax2.bar(x, runner_means, yerr=runner_stds, capsize=5,
+                color=(0.3, 0.5, 0.85), edgecolor="black", alpha=0.8)
+        ax2.set_xticks(list(x))
+        ax2.set_xticklabels([f"Epoch\n{e}" for e in ep_list])
+        ax2.set_ylabel("Mean Tags (lower = better runners)")
+        ax2.set_title("Untrained Tagger vs Trained Runners")
+        ax2.grid(True, axis="y", alpha=0.3)
+
+        fig.tight_layout()
+        fig.savefig(os.path.join(plots_dir, "role_evaluation.png"), dpi=150)
+        plt.close(fig)
+        print(f"  Saved: {plots_dir}/role_evaluation.png")
 
     # --- Trajectory + heatmap per epoch ---
     traj_dir = os.path.join(save_dir, "trajectories")
@@ -606,8 +818,14 @@ def main():
             with open(log_path) as f:
                 training_log = json.load(f)
 
-    # Phase 2: Evaluate
+    # Phase 2: Evaluate (both models loaded)
     eval_metrics = run_evaluations(
+        algo_class, algo_name, args.epochs, save_dir,
+        display_mgr, args.eval_episodes,
+    )
+
+    # Phase 2b: Isolated role evaluation
+    role_metrics = run_role_evaluations(
         algo_class, algo_name, args.epochs, save_dir,
         display_mgr, args.eval_episodes,
     )
@@ -616,7 +834,8 @@ def main():
     print("\n" + "=" * 65)
     print("  PHASE 3: Generating plots")
     print("=" * 65)
-    generate_plots(algo_name, save_dir, training_log, eval_metrics)
+    generate_plots(algo_name, save_dir, training_log, eval_metrics,
+                   role_metrics)
 
     print("\n" + "=" * 65)
     print("  EXPERIMENT COMPLETE")

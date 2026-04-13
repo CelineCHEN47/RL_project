@@ -64,6 +64,16 @@ class DualRoleAlgorithm(BaseRLAlgorithm):
         self.tagger_algo.load(tagger_path)
         self.runner_algo.load(runner_path)
 
+    def load_tagger_only(self, path: str):
+        """Load only the tagger model, leave runner untrained."""
+        tagger_path, _ = _dual_paths(path)
+        self.tagger_algo.load(tagger_path)
+
+    def load_runner_only(self, path: str):
+        """Load only the runner model, leave tagger untrained."""
+        _, runner_path = _dual_paths(path)
+        self.runner_algo.load(runner_path)
+
     def reset(self):
         """Forward reset to both models."""
         self.tagger_algo.reset()

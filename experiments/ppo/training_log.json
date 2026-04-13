@@ -1,52 +1,52 @@
 [
   {
     "round": 1,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 1,
+    "total_tags": 1
   },
   {
     "round": 2,
     "round_tags": 0,
-    "total_tags": 0
+    "total_tags": 1
   },
   {
     "round": 3,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 1,
+    "total_tags": 2
   },
   {
     "round": 4,
     "round_tags": 0,
-    "total_tags": 0
+    "total_tags": 2
   },
   {
     "round": 5,
     "round_tags": 0,
-    "total_tags": 0
+    "total_tags": 2
   },
   {
     "round": 6,
     "round_tags": 0,
-    "total_tags": 0
+    "total_tags": 2
   },
   {
     "round": 7,
     "round_tags": 0,
-    "total_tags": 0
+    "total_tags": 2
   },
   {
     "round": 8,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 2,
+    "total_tags": 4
   },
   {
     "round": 9,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 2,
+    "total_tags": 6
   },
   {
     "round": 10,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 1,
+    "total_tags": 7
   }
 ]
