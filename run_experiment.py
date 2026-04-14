@@ -41,10 +41,10 @@ import time
 # Default experiment configuration
 # ======================================================================
 DEFAULT_EPOCHS   = [10, 50, 100, 200, 500, 1000]
-STEPS_PER_ROUND  = 1000
+STEPS_PER_ROUND  = 2000
 PARALLEL_SIMS    = 2
 EVAL_EPISODES    = 20
-EVAL_STEPS       = 1000
+EVAL_STEPS       = 2000
 LOG_INTERVAL     = 5
 
 
