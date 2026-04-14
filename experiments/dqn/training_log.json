@@ -1,27 +1,252 @@
 [
   {
     "round": 1,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 5,
+    "total_tags": 5
   },
   {
     "round": 2,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 18,
+    "total_tags": 23
   },
   {
     "round": 3,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 4,
+    "total_tags": 27
   },
   {
     "round": 4,
-    "round_tags": 0,
-    "total_tags": 0
+    "round_tags": 10,
+    "total_tags": 37
   },
   {
     "round": 5,
+    "round_tags": 13,
+    "total_tags": 50
+  },
+  {
+    "round": 6,
+    "round_tags": 15,
+    "total_tags": 65
+  },
+  {
+    "round": 7,
+    "round_tags": 11,
+    "total_tags": 76
+  },
+  {
+    "round": 8,
+    "round_tags": 14,
+    "total_tags": 90
+  },
+  {
+    "round": 9,
+    "round_tags": 77,
+    "total_tags": 167
+  },
+  {
+    "round": 10,
+    "round_tags": 77,
+    "total_tags": 244
+  },
+  {
+    "round": 11,
+    "round_tags": 29,
+    "total_tags": 273
+  },
+  {
+    "round": 12,
+    "round_tags": 36,
+    "total_tags": 309
+  },
+  {
+    "round": 13,
+    "round_tags": 25,
+    "total_tags": 334
+  },
+  {
+    "round": 14,
+    "round_tags": 8,
+    "total_tags": 342
+  },
+  {
+    "round": 15,
+    "round_tags": 70,
+    "total_tags": 412
+  },
+  {
+    "round": 16,
+    "round_tags": 65,
+    "total_tags": 477
+  },
+  {
+    "round": 17,
+    "round_tags": 43,
+    "total_tags": 520
+  },
+  {
+    "round": 18,
+    "round_tags": 15,
+    "total_tags": 535
+  },
+  {
+    "round": 19,
+    "round_tags": 19,
+    "total_tags": 554
+  },
+  {
+    "round": 20,
+    "round_tags": 19,
+    "total_tags": 573
+  },
+  {
+    "round": 21,
+    "round_tags": 19,
+    "total_tags": 592
+  },
+  {
+    "round": 22,
+    "round_tags": 0,
+    "total_tags": 592
+  },
+  {
+    "round": 23,
+    "round_tags": 46,
+    "total_tags": 638
+  },
+  {
+    "round": 24,
+    "round_tags": 9,
+    "total_tags": 647
+  },
+  {
+    "round": 25,
+    "round_tags": 196,
+    "total_tags": 843
+  },
+  {
+    "round": 26,
+    "round_tags": 192,
+    "total_tags": 1035
+  },
+  {
+    "round": 27,
+    "round_tags": 80,
+    "total_tags": 1115
+  },
+  {
+    "round": 28,
+    "round_tags": 97,
+    "total_tags": 1212
+  },
+  {
+    "round": 29,
+    "round_tags": 112,
+    "total_tags": 1324
+  },
+  {
+    "round": 30,
+    "round_tags": 103,
+    "total_tags": 1427
+  },
+  {
+    "round": 31,
+    "round_tags": 41,
+    "total_tags": 1468
+  },
+  {
+    "round": 32,
+    "round_tags": 87,
+    "total_tags": 1555
+  },
+  {
+    "round": 33,
+    "round_tags": 54,
+    "total_tags": 1609
+  },
+  {
+    "round": 34,
+    "round_tags": 9,
+    "total_tags": 1618
+  },
+  {
+    "round": 35,
+    "round_tags": 41,
+    "total_tags": 1659
+  },
+  {
+    "round": 36,
+    "round_tags": 14,
+    "total_tags": 1673
+  },
+  {
+    "round": 37,
+    "round_tags": 7,
+    "total_tags": 1680
+  },
+  {
+    "round": 38,
+    "round_tags": 25,
+    "total_tags": 1705
+  },
+  {
+    "round": 39,
+    "round_tags": 13,
+    "total_tags": 1718
+  },
+  {
+    "round": 40,
+    "round_tags": 27,
+    "total_tags": 1745
+  },
+  {
+    "round": 41,
+    "round_tags": 14,
+    "total_tags": 1759
+  },
+  {
+    "round": 42,
+    "round_tags": 23,
+    "total_tags": 1782
+  },
+  {
+    "round": 43,
+    "round_tags": 12,
+    "total_tags": 1794
+  },
+  {
+    "round": 44,
+    "round_tags": 28,
+    "total_tags": 1822
+  },
+  {
+    "round": 45,
+    "round_tags": 34,
+    "total_tags": 1856
+  },
+  {
+    "round": 46,
+    "round_tags": 19,
+    "total_tags": 1875
+  },
+  {
+    "round": 47,
+    "round_tags": 16,
+    "total_tags": 1891
+  },
+  {
+    "round": 48,
     "round_tags": 2,
-    "total_tags": 2
+    "total_tags": 1893
+  },
+  {
+    "round": 49,
+    "round_tags": 7,
+    "total_tags": 1900
+  },
+  {
+    "round": 50,
+    "round_tags": 17,
+    "total_tags": 1917
   }
 ]
