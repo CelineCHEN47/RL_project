@@ -1,27 +1,502 @@
 [
   {
     "round": 1,
-    "round_tags": 0,
-    "total_tags": 0
-  },
-  {
-    "round": 2,
-    "round_tags": 0,
-    "total_tags": 0
-  },
-  {
-    "round": 3,
-    "round_tags": 2,
-    "total_tags": 2
-  },
-  {
-    "round": 4,
-    "round_tags": 2,
+    "round_tags": 4,
     "total_tags": 4
   },
   {
-    "round": 5,
+    "round": 2,
+    "round_tags": 2,
+    "total_tags": 6
+  },
+  {
+    "round": 3,
     "round_tags": 1,
-    "total_tags": 5
+    "total_tags": 7
+  },
+  {
+    "round": 4,
+    "round_tags": 3,
+    "total_tags": 10
+  },
+  {
+    "round": 5,
+    "round_tags": 0,
+    "total_tags": 10
+  },
+  {
+    "round": 6,
+    "round_tags": 3,
+    "total_tags": 13
+  },
+  {
+    "round": 7,
+    "round_tags": 2,
+    "total_tags": 15
+  },
+  {
+    "round": 8,
+    "round_tags": 0,
+    "total_tags": 15
+  },
+  {
+    "round": 9,
+    "round_tags": 1,
+    "total_tags": 16
+  },
+  {
+    "round": 10,
+    "round_tags": 9,
+    "total_tags": 25
+  },
+  {
+    "round": 11,
+    "round_tags": 1,
+    "total_tags": 26
+  },
+  {
+    "round": 12,
+    "round_tags": 0,
+    "total_tags": 26
+  },
+  {
+    "round": 13,
+    "round_tags": 0,
+    "total_tags": 26
+  },
+  {
+    "round": 14,
+    "round_tags": 1,
+    "total_tags": 27
+  },
+  {
+    "round": 15,
+    "round_tags": 1,
+    "total_tags": 28
+  },
+  {
+    "round": 16,
+    "round_tags": 1,
+    "total_tags": 29
+  },
+  {
+    "round": 17,
+    "round_tags": 1,
+    "total_tags": 30
+  },
+  {
+    "round": 18,
+    "round_tags": 0,
+    "total_tags": 30
+  },
+  {
+    "round": 19,
+    "round_tags": 1,
+    "total_tags": 31
+  },
+  {
+    "round": 20,
+    "round_tags": 1,
+    "total_tags": 32
+  },
+  {
+    "round": 21,
+    "round_tags": 2,
+    "total_tags": 34
+  },
+  {
+    "round": 22,
+    "round_tags": 0,
+    "total_tags": 34
+  },
+  {
+    "round": 23,
+    "round_tags": 6,
+    "total_tags": 40
+  },
+  {
+    "round": 24,
+    "round_tags": 2,
+    "total_tags": 42
+  },
+  {
+    "round": 25,
+    "round_tags": 1,
+    "total_tags": 43
+  },
+  {
+    "round": 26,
+    "round_tags": 2,
+    "total_tags": 45
+  },
+  {
+    "round": 27,
+    "round_tags": 3,
+    "total_tags": 48
+  },
+  {
+    "round": 28,
+    "round_tags": 3,
+    "total_tags": 51
+  },
+  {
+    "round": 29,
+    "round_tags": 4,
+    "total_tags": 55
+  },
+  {
+    "round": 30,
+    "round_tags": 3,
+    "total_tags": 58
+  },
+  {
+    "round": 31,
+    "round_tags": 6,
+    "total_tags": 64
+  },
+  {
+    "round": 32,
+    "round_tags": 1,
+    "total_tags": 65
+  },
+  {
+    "round": 33,
+    "round_tags": 4,
+    "total_tags": 69
+  },
+  {
+    "round": 34,
+    "round_tags": 2,
+    "total_tags": 71
+  },
+  {
+    "round": 35,
+    "round_tags": 1,
+    "total_tags": 72
+  },
+  {
+    "round": 36,
+    "round_tags": 1,
+    "total_tags": 73
+  },
+  {
+    "round": 37,
+    "round_tags": 1,
+    "total_tags": 74
+  },
+  {
+    "round": 38,
+    "round_tags": 3,
+    "total_tags": 77
+  },
+  {
+    "round": 39,
+    "round_tags": 0,
+    "total_tags": 77
+  },
+  {
+    "round": 40,
+    "round_tags": 1,
+    "total_tags": 78
+  },
+  {
+    "round": 41,
+    "round_tags": 6,
+    "total_tags": 84
+  },
+  {
+    "round": 42,
+    "round_tags": 2,
+    "total_tags": 86
+  },
+  {
+    "round": 43,
+    "round_tags": 1,
+    "total_tags": 87
+  },
+  {
+    "round": 44,
+    "round_tags": 4,
+    "total_tags": 91
+  },
+  {
+    "round": 45,
+    "round_tags": 3,
+    "total_tags": 94
+  },
+  {
+    "round": 46,
+    "round_tags": 1,
+    "total_tags": 95
+  },
+  {
+    "round": 47,
+    "round_tags": 2,
+    "total_tags": 97
+  },
+  {
+    "round": 48,
+    "round_tags": 1,
+    "total_tags": 98
+  },
+  {
+    "round": 49,
+    "round_tags": 4,
+    "total_tags": 102
+  },
+  {
+    "round": 50,
+    "round_tags": 0,
+    "total_tags": 102
+  },
+  {
+    "round": 51,
+    "round_tags": 4,
+    "total_tags": 106
+  },
+  {
+    "round": 52,
+    "round_tags": 3,
+    "total_tags": 109
+  },
+  {
+    "round": 53,
+    "round_tags": 0,
+    "total_tags": 109
+  },
+  {
+    "round": 54,
+    "round_tags": 0,
+    "total_tags": 109
+  },
+  {
+    "round": 55,
+    "round_tags": 0,
+    "total_tags": 109
+  },
+  {
+    "round": 56,
+    "round_tags": 0,
+    "total_tags": 109
+  },
+  {
+    "round": 57,
+    "round_tags": 1,
+    "total_tags": 110
+  },
+  {
+    "round": 58,
+    "round_tags": 6,
+    "total_tags": 116
+  },
+  {
+    "round": 59,
+    "round_tags": 2,
+    "total_tags": 118
+  },
+  {
+    "round": 60,
+    "round_tags": 1,
+    "total_tags": 119
+  },
+  {
+    "round": 61,
+    "round_tags": 1,
+    "total_tags": 120
+  },
+  {
+    "round": 62,
+    "round_tags": 1,
+    "total_tags": 121
+  },
+  {
+    "round": 63,
+    "round_tags": 0,
+    "total_tags": 121
+  },
+  {
+    "round": 64,
+    "round_tags": 5,
+    "total_tags": 126
+  },
+  {
+    "round": 65,
+    "round_tags": 3,
+    "total_tags": 129
+  },
+  {
+    "round": 66,
+    "round_tags": 1,
+    "total_tags": 130
+  },
+  {
+    "round": 67,
+    "round_tags": 2,
+    "total_tags": 132
+  },
+  {
+    "round": 68,
+    "round_tags": 1,
+    "total_tags": 133
+  },
+  {
+    "round": 69,
+    "round_tags": 0,
+    "total_tags": 133
+  },
+  {
+    "round": 70,
+    "round_tags": 2,
+    "total_tags": 135
+  },
+  {
+    "round": 71,
+    "round_tags": 4,
+    "total_tags": 139
+  },
+  {
+    "round": 72,
+    "round_tags": 4,
+    "total_tags": 143
+  },
+  {
+    "round": 73,
+    "round_tags": 3,
+    "total_tags": 146
+  },
+  {
+    "round": 74,
+    "round_tags": 1,
+    "total_tags": 147
+  },
+  {
+    "round": 75,
+    "round_tags": 0,
+    "total_tags": 147
+  },
+  {
+    "round": 76,
+    "round_tags": 4,
+    "total_tags": 151
+  },
+  {
+    "round": 77,
+    "round_tags": 6,
+    "total_tags": 157
+  },
+  {
+    "round": 78,
+    "round_tags": 1,
+    "total_tags": 158
+  },
+  {
+    "round": 79,
+    "round_tags": 3,
+    "total_tags": 161
+  },
+  {
+    "round": 80,
+    "round_tags": 3,
+    "total_tags": 164
+  },
+  {
+    "round": 81,
+    "round_tags": 4,
+    "total_tags": 168
+  },
+  {
+    "round": 82,
+    "round_tags": 3,
+    "total_tags": 171
+  },
+  {
+    "round": 83,
+    "round_tags": 5,
+    "total_tags": 176
+  },
+  {
+    "round": 84,
+    "round_tags": 3,
+    "total_tags": 179
+  },
+  {
+    "round": 85,
+    "round_tags": 5,
+    "total_tags": 184
+  },
+  {
+    "round": 86,
+    "round_tags": 4,
+    "total_tags": 188
+  },
+  {
+    "round": 87,
+    "round_tags": 5,
+    "total_tags": 193
+  },
+  {
+    "round": 88,
+    "round_tags": 5,
+    "total_tags": 198
+  },
+  {
+    "round": 89,
+    "round_tags": 5,
+    "total_tags": 203
+  },
+  {
+    "round": 90,
+    "round_tags": 5,
+    "total_tags": 208
+  },
+  {
+    "round": 91,
+    "round_tags": 3,
+    "total_tags": 211
+  },
+  {
+    "round": 92,
+    "round_tags": 6,
+    "total_tags": 217
+  },
+  {
+    "round": 93,
+    "round_tags": 8,
+    "total_tags": 225
+  },
+  {
+    "round": 94,
+    "round_tags": 4,
+    "total_tags": 229
+  },
+  {
+    "round": 95,
+    "round_tags": 2,
+    "total_tags": 231
+  },
+  {
+    "round": 96,
+    "round_tags": 4,
+    "total_tags": 235
+  },
+  {
+    "round": 97,
+    "round_tags": 9,
+    "total_tags": 244
+  },
+  {
+    "round": 98,
+    "round_tags": 6,
+    "total_tags": 250
+  },
+  {
+    "round": 99,
+    "round_tags": 4,
+    "total_tags": 254
+  },
+  {
+    "round": 100,
+    "round_tags": 5,
+    "total_tags": 259
   }
 ]

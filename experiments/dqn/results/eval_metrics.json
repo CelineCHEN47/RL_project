@@ -1,22 +1,32 @@
 [
   {
-    "checkpoint": "experiments\\dqn\\checkpoints\\dqn_epoch_2.pt",
-    "num_episodes": 2,
-    "mean_tags": 0.0,
-    "std_tags": 0.0,
+    "checkpoint": "experiments\\dqn\\checkpoints\\dqn_epoch_10.pt",
+    "num_episodes": 20,
+    "mean_tags": 0.7,
+    "std_tags": 0.9539392014169455,
     "min_tags": 0,
-    "max_tags": 0,
-    "total_tags": 0,
-    "epoch": 2
+    "max_tags": 4,
+    "total_tags": 14,
+    "epoch": 10
   },
   {
-    "checkpoint": "experiments\\dqn\\checkpoints\\dqn_epoch_5.pt",
-    "num_episodes": 2,
-    "mean_tags": 1.0,
-    "std_tags": 1.0,
+    "checkpoint": "experiments\\dqn\\checkpoints\\dqn_epoch_50.pt",
+    "num_episodes": 20,
+    "mean_tags": 0.85,
+    "std_tags": 1.5256146302392357,
+    "min_tags": 0,
+    "max_tags": 6,
+    "total_tags": 17,
+    "epoch": 50
+  },
+  {
+    "checkpoint": "experiments\\dqn\\checkpoints\\dqn_epoch_100.pt",
+    "num_episodes": 20,
+    "mean_tags": 0.2,
+    "std_tags": 0.5099019513592785,
     "min_tags": 0,
     "max_tags": 2,
-    "total_tags": 2,
-    "epoch": 5
+    "total_tags": 4,
+    "epoch": 100
   }
 ]
