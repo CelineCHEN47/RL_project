@@ -311,7 +311,9 @@ def evaluate_checkpoint(algo_class, algo_name: str, ckpt_path: str,
     num_agents = len(sim.agents)
 
     # Load checkpoint — DualRoleAlgorithm.load handles _tagger/_runner paths
-    sim.agents[0].algorithm.load(ckpt_path)
+    # sim.agents[0].algorithm.load(ckpt_path)
+    for agent in sim.agents:
+        agent.algorithm.load(ckpt_path)
 
     # Freeze policy updates during evaluation while keeping dynamics intact.
     def _eval_no_learn(*_args, **_kwargs):
