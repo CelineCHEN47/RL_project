@@ -172,46 +172,103 @@ class GameManager:
                                     shared_runner=shared_runner)
         return algo_class()
 
+    def _reset_round(self):
+        """Respawn everyone and restart round state, keeping learned models."""
+        spawn_points = list(self.level.spawn_points)
+        random.shuffle(spawn_points)
+
+        for i, entity in enumerate(self.entities):
+            entity.is_eliminated = False
+            entity.is_tagger = False
+            if i < len(spawn_points):
+                entity.x = float(spawn_points[i][0])
+                entity.y = float(spawn_points[i][1])
+            entity.vx = 0.0
+            entity.vy = 0.0
+            half = entity.ENTITY_SIZE // 2
+            entity.rect.x = int(entity.x) - half
+            entity.rect.y = int(entity.y) - half
+            # Clear per-agent learning state to prevent cross-round leakage
+            if hasattr(entity, 'last_observation'):
+                entity.last_observation = None
+            if hasattr(entity, '_pending_reward'):
+                entity._pending_reward = 0.0
+                entity._pending_done = False
+            for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
+                if hasattr(entity, attr):
+                    delattr(entity, attr)
+
+        self.movable_objects.clear()
+        for cp in self.level.crate_spawns:
+            self.movable_objects.append(MovableObject(cp[0], cp[1]))
+
+        if self.entities:
+            tagger = random.choice(self.entities)
+            self.tag_logic.set_tagger(tagger.entity_id)
+
+        self.rl_env = TagEnvironment(self.level, self.entities,
+                                     self.movable_objects)
+
+    def _respawn_entity(self, entity):
+        """Teleport a tagged runner to a random spawn point."""
+        sp = random.choice(self.level.spawn_points)
+        entity.x = float(sp[0])
+        entity.y = float(sp[1])
+        entity.vx = 0.0
+        entity.vy = 0.0
+        half = entity.ENTITY_SIZE // 2
+        entity.rect.x = int(entity.x) - half
+        entity.rect.y = int(entity.y) - half
+        for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
+            if hasattr(entity, attr):
+                delattr(entity, attr)
+
     def _update(self):
         """Update game state for one frame."""
         is_training = (self.train_mode == config.TrainMode.TRAIN_LIVE)
 
         keys = pygame.key.get_pressed()
-        if self.player:
+        if self.player and not self.player.is_eliminated:
             self.player.handle_input(keys)
 
         for agent in self.agents:
+            if agent.is_eliminated:
+                continue
             obs = self.rl_env.get_observation(agent)
             agent.decide_action(obs)
 
         for entity in self.entities:
+            if entity.is_eliminated:
+                continue
             entity.apply_velocity()
             resolve_entity_walls(entity, self.level.wall_rects)
 
         for entity in self.entities:
+            if entity.is_eliminated:
+                continue
             resolve_entity_crates(entity, self.movable_objects,
                                   self.level.wall_rects)
 
         tag_event = self.tag_logic.update()
+        reward_event = dict(tag_event) if tag_event else None
 
         if tag_event:
-            tagged_entity = None
-            for e in self.entities:
-                if e.entity_id == tag_event.get("tagged_id"):
-                    tagged_entity = e
-                    break
-            if tagged_entity:
-                self.renderer.emit_tag_particles(tagged_entity.x, tagged_entity.y)
+            tagged_pos = tag_event.get("tagged_pos")
+            if tagged_pos:
+                self.renderer.emit_tag_particles(tagged_pos[0], tagged_pos[1])
 
         self.renderer.update_particles()
 
         if is_training:
-            rewards = self.rl_env.get_all_rewards(tag_event)
+            rewards = self.rl_env.get_all_rewards(reward_event)
             for agent in self.agents:
+                is_tagged = (tag_event is not None and
+                             tag_event.get("tagged_id") == agent.entity_id)
+                if agent.is_eliminated and not is_tagged:
+                    continue
                 next_obs = self.rl_env.get_observation(agent)
                 reward = rewards.get(agent.entity_id, 0.0)
-                done = (tag_event is not None and
-                        tag_event.get("tagged_id") == agent.entity_id)
+                done = is_tagged
                 agent.learn(reward, next_obs, done)
 
             if tag_event:
@@ -219,12 +276,20 @@ class GameManager:
                     if agent.entity_id == tag_event.get("tagged_id"):
                         agent.algorithm.reset()
 
+        # Respawn tagged runner (works for both player and agents)
+        if tag_event:
+            tagged_id = tag_event["tagged_id"]
+            for entity in self.entities:
+                if entity.entity_id == tagged_id:
+                    self._respawn_entity(entity)
+                    break
+
     def _render(self):
-        if self.player:
+        if self.player and not self.player.is_eliminated:
             self.renderer.set_camera(self.player.x, self.player.y)
         elif self.entities:
             for e in self.entities:
-                if e.is_tagger:
+                if e.is_tagger and not e.is_eliminated:
                     self.renderer.set_camera(e.x, e.y)
                     break
 

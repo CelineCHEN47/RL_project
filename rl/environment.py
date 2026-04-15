@@ -75,6 +75,8 @@ class TagEnvironment:
         for other in self.entities:
             if other.entity_id == entity.entity_id:
                 continue
+            if other.is_eliminated:
+                continue
 
             # Relative position (normalized by max map distance)
             rel_x = (other.x - entity.x) / self._max_dist
@@ -138,39 +140,57 @@ class TagEnvironment:
         """
         reward = 0.0
 
+        # Eliminated entities do not receive ongoing shaping rewards.
+        # Keep one terminal reward on the frame they are tagged.
+        if entity.is_eliminated:
+            if tag_event and tag_event.get("tagged_id") == entity.entity_id:
+                return -50.0
+            return 0.0
+
         # --- Milder time scaling: ramps from 1.0 to 3.0 over 300 steps ---
         time_scale = min(1.0 + self.steps_since_tag / 300.0, 3.0)
 
         if entity.is_tagger:
             # 1. Tag success: dominant reward signal
-            if tag_event and tag_event.get("tagger_id") == entity.entity_id:
+            tagged_now = bool(tag_event and
+                              tag_event.get("tagger_id") == entity.entity_id)
+            if tagged_now:
                 reward += 50.0
-                return reward  # no need for shaping on tag frame
+            else:
+                # 2. Time penalty (mild, escalating)
+                reward -= 0.01 * time_scale
 
-            # 2. Time penalty (mild, escalating)
-            reward -= 0.01 * time_scale
+                # 3. Distance CHANGE to nearest runner (delta-based)
+                #    Reward getting closer, punish getting farther
+                min_dist = float("inf")
+                for other in self.entities:
+                    if (other.entity_id == entity.entity_id
+                            or other.is_tagger or other.is_eliminated):
+                        continue
+                    d = entity.distance_to(other)
+                    min_dist = min(min_dist, d)
 
-            # 3. Distance CHANGE to nearest runner (delta-based)
-            #    Reward getting closer, punish getting farther
-            min_dist = float("inf")
-            for other in self.entities:
-                if other.entity_id == entity.entity_id or other.is_tagger:
-                    continue
-                d = entity.distance_to(other)
-                min_dist = min(min_dist, d)
+                if min_dist < float("inf"):
+                    # Store last distance for delta computation
+                    prev_dist = getattr(entity, '_prev_tagger_dist', min_dist)
+                    delta = prev_dist - min_dist  # positive = getting closer
+                    max_dist = max(self.level_w, self.level_h)
+                    reward += 1000.0 * (delta / max_dist) * time_scale
+                    entity._prev_tagger_dist = min_dist
 
-            if min_dist < float("inf"):
-                # Store last distance for delta computation
-                prev_dist = getattr(entity, '_prev_tagger_dist', min_dist)
-                delta = prev_dist - min_dist  # positive = getting closer
-                max_dist = max(self.level_w, self.level_h)
-                reward += 1.0 * (delta / max_dist) * time_scale
-                entity._prev_tagger_dist = min_dist
+                # 4. Small movement bonus (prevent standing still)
+                speed = math.sqrt(entity.vx ** 2 + entity.vy ** 2)
+                if speed > 0.5:
+                    reward += 0.005
 
-            # 4. Small movement bonus (prevent standing still)
-            speed = math.sqrt(entity.vx ** 2 + entity.vy ** 2)
-            if speed > 0.5:
-                reward += 0.005
+            # 5. Round win bonus: only when one survivor remains (tagger wins round)
+            if (tag_event
+                    and tag_event.get("round_win_tagger_id") == entity.entity_id):
+                reward += config.ROUND_WIN_TAGGER_BONUS
+
+            # Keep tag frame clean: tag reward + round-win bonus only.
+            if tagged_now:
+                return reward
 
         else:  # Runner
             # 1. Got tagged: dominant punishment
@@ -183,7 +203,7 @@ class TagEnvironment:
 
             # 3. Distance CHANGE from tagger (delta-based)
             for other in self.entities:
-                if other.is_tagger:
+                if other.is_tagger and not other.is_eliminated:
                     d = entity.distance_to(other)
                     prev_dist = getattr(entity, '_prev_runner_dist', d)
                     delta = d - prev_dist  # positive = getting farther
@@ -195,7 +215,7 @@ class TagEnvironment:
             # 4. Proximity danger penalty (close to tagger = bad)
             #    Only activates within a danger zone, not map-wide
             for other in self.entities:
-                if other.is_tagger:
+                if other.is_tagger and not other.is_eliminated:
                     d = entity.distance_to(other)
                     danger_zone = config.TAG_RADIUS * 4  # ~96 pixels
                     if d < danger_zone:
@@ -216,6 +236,8 @@ class TagEnvironment:
         rewards = {
             entity.entity_id: self.compute_reward(entity, tag_event)
             for entity in self.entities
+            if not entity.is_eliminated
+            or (tag_event and tag_event.get("tagged_id") == entity.entity_id)
         }
 
         # Update step counter

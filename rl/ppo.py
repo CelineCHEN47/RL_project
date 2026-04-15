@@ -90,7 +90,13 @@ class ActorCritic(nn.Module):
 
 
 class RolloutBuffer:
-    """Stores one rollout of transitions for PPO update."""
+    """Stores one rollout of transitions for PPO update.
+
+    When multiple agents share this buffer their transitions are interleaved
+    (e.g. A,B,C,A,B,C,...).  GAE is computed **per-agent** so that
+    ``values[t+1]`` always refers to the same agent's next step, not a
+    different agent's concurrent step.
+    """
 
     def __init__(self):
         self.states = []
@@ -99,36 +105,64 @@ class RolloutBuffer:
         self.rewards = []
         self.values = []
         self.dones = []
+        self.agent_ids = []  # tracks which PPO instance produced each entry
 
-    def add(self, state, action, log_prob, reward, value, done):
+    def add(self, state, action, log_prob, reward, value, done, agent_id=None):
         self.states.append(state)
         self.actions.append(action)
         self.log_probs.append(log_prob)
         self.rewards.append(reward)
         self.values.append(value)
         self.dones.append(done)
+        self.agent_ids.append(agent_id)
 
     def __len__(self):
         return len(self.states)
 
-    def compute_gae(self, last_value: float):
-        """Compute GAE advantages and discounted returns."""
+    def compute_gae(self, last_value: float, last_agent_id=None):
+        """Compute GAE advantages and discounted returns.
+
+        Transitions are grouped by ``agent_id`` so that each agent's
+        sub-trajectory gets a correct, contiguous GAE computation.
+        The ``last_value`` bootstrap applies only to the agent identified
+        by ``last_agent_id``; other agents bootstrap from their own last
+        value estimate.
+        """
         n = len(self.rewards)
         advantages = np.zeros(n, dtype=np.float32)
-        last_gae = 0.0
 
-        for t in reversed(range(n)):
-            if t == n - 1:
-                next_value = last_value
+        # Group buffer indices by agent
+        agent_groups: dict[object, list[int]] = {}
+        for t in range(n):
+            aid = self.agent_ids[t]
+            if aid not in agent_groups:
+                agent_groups[aid] = []
+            agent_groups[aid].append(t)
+
+        for aid, indices in agent_groups.items():
+            # Bootstrap: use caller-provided value for the triggering agent,
+            # otherwise use this agent's last value estimate (continuing rollout).
+            if aid == last_agent_id:
+                bootstrap = last_value
             else:
-                next_value = self.values[t + 1]
+                bootstrap = self.values[indices[-1]]
 
-            next_non_terminal = 1.0 - float(self.dones[t])
-            delta = (self.rewards[t]
-                     + GAMMA * next_value * next_non_terminal
-                     - self.values[t])
-            last_gae = delta + GAMMA * GAE_LAMBDA * next_non_terminal * last_gae
-            advantages[t] = last_gae
+            m = len(indices)
+            last_gae = 0.0
+
+            for i in reversed(range(m)):
+                t = indices[i]
+                if i == m - 1:
+                    next_val = bootstrap
+                else:
+                    next_val = self.values[indices[i + 1]]
+
+                non_terminal = 1.0 - float(self.dones[t])
+                delta = (self.rewards[t]
+                         + GAMMA * next_val * non_terminal
+                         - self.values[t])
+                last_gae = delta + GAMMA * GAE_LAMBDA * non_terminal * last_gae
+                advantages[t] = last_gae
 
         returns = advantages + np.array(self.values, dtype=np.float32)
         return advantages, returns
@@ -157,6 +191,7 @@ class RolloutBuffer:
         self.rewards.clear()
         self.values.clear()
         self.dones.clear()
+        self.agent_ids.clear()
 
 
 class PPO(BaseRLAlgorithm):
@@ -229,6 +264,7 @@ class PPO(BaseRLAlgorithm):
             reward=reward,
             value=self._last_value,
             done=done,
+            agent_id=id(self),  # identify which PPO instance produced this
         )
         self.total_steps += 1
 
@@ -242,7 +278,8 @@ class PPO(BaseRLAlgorithm):
             _, last_value = self.network(last_state)
             last_value = last_value.item()
 
-        advantages, returns = self.buffer.compute_gae(last_value)
+        advantages, returns = self.buffer.compute_gae(
+            last_value, last_agent_id=id(self))
 
         adv_mean = advantages.mean()
         adv_std = advantages.std() + 1e-8

@@ -99,6 +99,8 @@ class Renderer:
                       tick: int):
         """Draw all entities with sprites, shadows, and effects."""
         for entity in entities:
+            if entity.is_eliminated:
+                continue
             sx, sy = self.world_to_screen(entity.x, entity.y)
             is_player = getattr(entity, "is_human", False)
 

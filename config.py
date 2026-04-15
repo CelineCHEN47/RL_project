@@ -14,12 +14,15 @@ TILE_SIZE = 32
 PLAYER_SPEED = 3.0
 AGENT_SPEED = 3.0
 TAG_RADIUS = 24
-TAG_COOLDOWN_MS = 1000
+TAG_COOLDOWN_MS = 1000          # kept for reference / UI display
+TAG_COOLDOWN_FRAMES = 60        # frame-based cooldown (= TAG_COOLDOWN_MS / (1000/FPS))
 CRATE_PUSH_SPEED = 2.0
 NUM_AGENTS = 4
+AUTO_RESET_ON_ONE_LEFT = True
+ROUND_WIN_TAGGER_BONUS = 100.0
 
 # RL
-DECISION_INTERVAL = 4  # agents decide every N frames
+DECISION_INTERVAL = 2  # agents decide every N frames
 DUAL_ROLE_ENABLED = True  # separate tagger/runner models
 
 # Colors

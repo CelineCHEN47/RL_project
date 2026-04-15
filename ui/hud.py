@@ -30,7 +30,7 @@ class HUD:
         # Tagger indicator (top-left)
         tagger_label = "IT: ???"
         for e in entities:
-            if e.entity_id == tag_logic.current_tagger_id:
+            if e.entity_id == tag_logic.current_tagger_id and not e.is_eliminated:
                 name = "YOU" if getattr(e, "is_human", False) else f"Agent {e.entity_id}"
                 tagger_label = f"IT: {name}"
                 break
@@ -63,7 +63,8 @@ class HUD:
         panel_w = 150
         panel_x = sw - panel_w - 10
         panel_y = bar_h + 10
-        panel_h = 28 + len(entities) * 22
+        alive_entities = [e for e in entities if not e.is_eliminated]
+        panel_h = 28 + len(alive_entities) * 22
 
         panel_surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
         panel_surf.fill((15, 15, 25, 180))
@@ -76,7 +77,7 @@ class HUD:
                                  panel_y + 4))
 
         y_off = panel_y + 28
-        for e in entities:
+        for e in alive_entities:
             name = "You" if getattr(e, "is_human", False) else f"Agent {e.entity_id}"
             if e.is_tagger:
                 dot_color = (220, 60, 60)

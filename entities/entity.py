@@ -15,6 +15,7 @@ class Entity:
         self.vx = 0.0
         self.vy = 0.0
         self.is_tagger = False
+        self.is_eliminated = False
         self.tag_count = 0  # how many times this entity tagged someone
         half = self.ENTITY_SIZE // 2
         self.rect = pygame.Rect(int(x) - half, int(y) - half,

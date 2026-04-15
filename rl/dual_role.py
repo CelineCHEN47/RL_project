@@ -94,19 +94,29 @@ def dual_model_exists(path: str) -> bool:
 
 
 def _share_weights(target, source):
-    """Make target algo share networks/tables/optimizer with source.
-    Buffers remain per-instance (intentional — avoids concurrent access)."""
-    # PyTorch-based (PPO)
+    """Make target algo share networks, optimizers, AND experience buffers
+    with source so that all agents of the same role contribute to a single
+    buffer and trigger exactly one synchronized gradient update.
+
+    Per-agent temporary state (_last_state, _last_log_prob, etc.) remains
+    per-instance because each agent's PPO/DQN object is still a separate
+    Python object — only the heavy shared resources are aliased.
+    """
+    # PyTorch-based (PPO): share network + optimizer + rollout buffer
     if hasattr(source, "network") and hasattr(source, "optimizer"):
         target.network = source.network
         target.optimizer = source.optimizer
+    if hasattr(source, "buffer"):
+        target.buffer = source.buffer
 
-    # PyTorch-based (DQN)
+    # PyTorch-based (DQN): share networks + optimizer + replay buffer
     if hasattr(source, "q_net"):
         target.q_net = source.q_net
         target.target_net = source.target_net
         target.optimizer = source.optimizer
+    if hasattr(source, "replay_buffer"):
+        target.replay_buffer = source.replay_buffer
 
-    # Tabular (Q-Learning, SARSA)
+    # Tabular (Q-Learning, SARSA): share Q-table + exploration state
     if hasattr(source, "q_table"):
         target.q_table = source.q_table

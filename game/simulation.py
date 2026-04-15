@@ -69,35 +69,67 @@ class HeadlessSimulation:
             return self.agents[0].algorithm.tagger_algo, self.agents[0].algorithm.runner_algo
         return None, None
 
+    def _respawn_agent(self, agent):
+        """Teleport a tagged runner to a random spawn point."""
+        sp = random.choice(self.level.spawn_points)
+        agent.x = float(sp[0])
+        agent.y = float(sp[1])
+        agent.vx = 0.0
+        agent.vy = 0.0
+        half = agent.ENTITY_SIZE // 2
+        agent.rect.x = int(agent.x) - half
+        agent.rect.y = int(agent.y) - half
+        # Clear delta-reward distance cache so first step after respawn
+        # doesn't produce a spurious large delta.
+        for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
+            if hasattr(agent, attr):
+                delattr(agent, attr)
+
     def step(self) -> dict | None:
         """Run one game step. Returns tag_event if a tag occurred."""
         for agent in self.agents:
+            if agent.is_eliminated:
+                continue
             obs = self.rl_env.get_observation(agent)
             agent.decide_action(obs)
 
         for entity in self.entities:
+            if entity.is_eliminated:
+                continue
             entity.apply_velocity()
             resolve_entity_walls(entity, self.level.wall_rects)
 
         for entity in self.entities:
+            if entity.is_eliminated:
+                continue
             resolve_entity_crates(entity, self.movable_objects,
                                   self.level.wall_rects)
 
         tag_event = self.tag_logic.update()
+        reward_event = dict(tag_event) if tag_event else None
 
-        rewards = self.rl_env.get_all_rewards(tag_event)
+        # --- Compute rewards before respawn so distances are correct ---
+        rewards = self.rl_env.get_all_rewards(reward_event)
         for agent in self.agents:
+            is_tagged = (tag_event is not None and
+                         tag_event.get("tagged_id") == agent.entity_id)
+            if agent.is_eliminated and not is_tagged:
+                continue
             next_obs = self.rl_env.get_observation(agent)
             reward = rewards.get(agent.entity_id, 0.0)
-            done = (tag_event is not None and
-                    tag_event.get("tagged_id") == agent.entity_id)
+            # done=True for the tagged runner (episode boundary for that agent)
+            done = is_tagged
             agent.learn(reward, next_obs, done)
 
+        # --- Respawn tagged runner to a random spawn point ---
         if tag_event:
             self.total_tags += 1
+            tagged_id = tag_event["tagged_id"]
             for agent in self.agents:
-                if agent.entity_id == tag_event.get("tagged_id"):
+                if agent.entity_id == tagged_id:
+                    self._respawn_agent(agent)
                     agent.algorithm.reset()
+                    break
 
         self.steps += 1
         return tag_event
@@ -108,6 +140,7 @@ class HeadlessSimulation:
         random.shuffle(spawn_points)
 
         for i, agent in enumerate(self.agents):
+            agent.is_eliminated = False
             if i < len(spawn_points):
                 agent.x = float(spawn_points[i][0])
                 agent.y = float(spawn_points[i][1])
@@ -116,7 +149,10 @@ class HeadlessSimulation:
                 half = agent.ENTITY_SIZE // 2
                 agent.rect.x = int(agent.x) - half
                 agent.rect.y = int(agent.y) - half
-            # 清除 delta-based reward 的上一步距离缓存
+            # Clear per-agent learning state to prevent cross-round leakage
+            agent.last_observation = None
+            agent._pending_reward = 0.0
+            agent._pending_done = False
             for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
                 if hasattr(agent, attr):
                     delattr(agent, attr)
