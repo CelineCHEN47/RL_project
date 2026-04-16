@@ -181,12 +181,19 @@ class DisplayManager:
 def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
                            save_dir: str,
                            display_mgr: DisplayManager | None,
-                           parallel_sims: int):
+                           parallel_sims: int,
+                           trace_decimation: int = 10):
     import config
     from game.simulation import HeadlessSimulation
+    from rl.recorder import TrainingRecorder
 
     ckpt_dir = os.path.join(save_dir, "checkpoints")
     os.makedirs(ckpt_dir, exist_ok=True)
+
+    # Recorder captures per-round traces from sim[0] only (avoids interleaving
+    # parallel-sim agents which have distinct entity_ids and positions).
+    recorder = (TrainingRecorder(save_dir, decimation=trace_decimation)
+                if trace_decimation > 0 else None)
 
     # Create first simulation (sets up shared dual-role models)
     first_sim = HeadlessSimulation(algo_class)
@@ -229,10 +236,15 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
             sim.reset()
             sim.total_tags = 0
 
+        if recorder:
+            recorder.start_round(round_num, sims[0])
+
         skip = False
         for step in range(STEPS_PER_ROUND):
-            for sim in sims:
+            for idx, sim in enumerate(sims):
                 tag_event = sim.step()
+                if idx == 0 and recorder:
+                    recorder.record_step(step, sim, tag_event)
                 if tag_event:
                     round_tags += 1
                     if display_mgr:
@@ -265,6 +277,9 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
             "total_tags": total_tags,
         })
 
+        if recorder:
+            recorder.end_round(sims[0], STEPS_PER_ROUND)
+
         if round_num % LOG_INTERVAL == 0 or round_num == 1:
             elapsed = time.time() - t_start
             print(f"  Round {round_num:>5}/{max_epoch}  |  "
@@ -293,6 +308,11 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
     with open(log_path, "w") as f:
         json.dump(training_log, f, indent=2)
     print(f"  Training log saved: {log_path}")
+
+    if recorder:
+        summary_path = recorder.finalize()
+        print(f"  Training summary saved: {summary_path}")
+        print(f"  Per-round traces: {os.path.join(save_dir, 'training_traces')}/")
 
     return training_log
 
@@ -793,6 +813,9 @@ def main():
     parser.add_argument("--display", action="store_true",
                         help="Open Pygame window to watch live "
                              "(local only; forces --sims 1)")
+    parser.add_argument("--trace-decimation", type=int, default=10,
+                        help="Record per-round trace every N steps "
+                             "(default: 10; set to 0 to disable)")
     args = parser.parse_args()
 
     algo_name = args.algorithm
@@ -813,6 +836,7 @@ def main():
         training_log = train_with_checkpoints(
             algo_class, algo_name, args.epochs, save_dir,
             display_mgr, args.sims,
+            trace_decimation=args.trace_decimation,
         )
     else:
         log_path = os.path.join(save_dir, "training_log.json")

@@ -62,6 +62,9 @@ class HeadlessSimulation:
                                      self.movable_objects)
         self.total_tags = 0
         self.steps = 0
+        # Last-step reward dict {entity_id: reward}. Populated inside step().
+        # Exposed for external recorders/debuggers.
+        self.last_rewards: dict[int, float] = {}
 
     def get_shared_algos(self):
         """Return (shared_tagger, shared_runner) from the first agent."""
@@ -110,6 +113,7 @@ class HeadlessSimulation:
 
         # --- Compute rewards before respawn so distances are correct ---
         rewards = self.rl_env.get_all_rewards(reward_event)
+        self.last_rewards = rewards
         for agent in self.agents:
             is_tagged = (tag_event is not None and
                          tag_event.get("tagged_id") == agent.entity_id)

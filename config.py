@@ -12,7 +12,9 @@ TILE_SIZE = 32
 
 # Gameplay
 PLAYER_SPEED = 3.0
-AGENT_SPEED = 3.0
+AGENT_SPEED = 3.0          # default / fallback (e.g. human player, pre-role-assignment)
+TAGGER_SPEED = 3.3         # tagger moves slightly faster so optimal chase yields positive distance delta
+RUNNER_SPEED = 3.0
 TAG_RADIUS = 24
 TAG_COOLDOWN_MS = 1000          # kept for reference / UI display
 TAG_COOLDOWN_FRAMES = 60        # frame-based cooldown (= TAG_COOLDOWN_MS / (1000/FPS))

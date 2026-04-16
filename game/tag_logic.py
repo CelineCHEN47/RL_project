@@ -32,6 +32,14 @@ class TagLogic:
                     e.is_tagger = True
                     self.current_tagger_id = e.entity_id
                     break
+
+        # Apply per-role speed so optimal pursuit produces a positive
+        # distance delta (tagger gradually closes on an ideally-fleeing runner).
+        for e in self.entities:
+            if hasattr(e, "is_human") and e.is_human:
+                continue  # don't override human player speed
+            e.speed = config.TAGGER_SPEED if e.is_tagger else config.RUNNER_SPEED
+
         self._cooldown_remaining = config.TAG_COOLDOWN_FRAMES
 
     def update(self) -> dict | None:

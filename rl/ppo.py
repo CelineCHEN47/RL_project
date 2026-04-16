@@ -104,29 +104,36 @@ class RolloutBuffer:
         self.log_probs = []
         self.rewards = []
         self.values = []
+        self.next_values = []  # V(s_{t+1}) stored at learn time, per transition
         self.dones = []
         self.agent_ids = []  # tracks which PPO instance produced each entry
 
-    def add(self, state, action, log_prob, reward, value, done, agent_id=None):
+    def add(self, state, action, log_prob, reward, value, next_value, done,
+            agent_id=None):
         self.states.append(state)
         self.actions.append(action)
         self.log_probs.append(log_prob)
         self.rewards.append(reward)
         self.values.append(value)
+        self.next_values.append(next_value)
         self.dones.append(done)
         self.agent_ids.append(agent_id)
 
     def __len__(self):
         return len(self.states)
 
-    def compute_gae(self, last_value: float, last_agent_id=None):
+    def compute_gae(self):
         """Compute GAE advantages and discounted returns.
 
-        Transitions are grouped by ``agent_id`` so that each agent's
-        sub-trajectory gets a correct, contiguous GAE computation.
-        The ``last_value`` bootstrap applies only to the agent identified
-        by ``last_agent_id``; other agents bootstrap from their own last
-        value estimate.
+        Each transition carries ``next_values[t] = V(s_{t+1})``, computed
+        at learn time from the next_state argument. This gives every agent
+        in a shared buffer a correct bootstrap for its last transition —
+        no reliance on a caller-provided ``last_value`` or a biased fallback
+        that reused ``V(s_t)``.
+
+        Transitions are still grouped by agent_id so that within-agent
+        GAE accumulation stops at each agent's tail instead of bleeding
+        across into another agent's concurrent sub-trajectory.
         """
         n = len(self.rewards)
         advantages = np.zeros(n, dtype=np.float32)
@@ -140,22 +147,12 @@ class RolloutBuffer:
             agent_groups[aid].append(t)
 
         for aid, indices in agent_groups.items():
-            # Bootstrap: use caller-provided value for the triggering agent,
-            # otherwise use this agent's last value estimate (continuing rollout).
-            if aid == last_agent_id:
-                bootstrap = last_value
-            else:
-                bootstrap = self.values[indices[-1]]
-
             m = len(indices)
             last_gae = 0.0
 
             for i in reversed(range(m)):
                 t = indices[i]
-                if i == m - 1:
-                    next_val = bootstrap
-                else:
-                    next_val = self.values[indices[i + 1]]
+                next_val = self.next_values[t]  # V(s_{t+1}), always available
 
                 non_terminal = 1.0 - float(self.dones[t])
                 delta = (self.rewards[t]
@@ -190,6 +187,7 @@ class RolloutBuffer:
         self.log_probs.clear()
         self.rewards.clear()
         self.values.clear()
+        self.next_values.clear()
         self.dones.clear()
         self.agent_ids.clear()
 
@@ -257,29 +255,32 @@ class PPO(BaseRLAlgorithm):
         if not hasattr(self, "_last_state"):
             return
 
+        # Compute V(next_state) now so every transition carries its own
+        # bootstrap value. This fixes the shared-buffer bias where
+        # non-triggering agents previously reused V(s_t) as the tail bootstrap.
+        with torch.no_grad():
+            next_tensor = self._obs_to_tensor(next_state)
+            _, next_value_t = self.network(next_tensor)
+            next_value = 0.0 if done else next_value_t.item()
+
         self.buffer.add(
             state=self._last_state,
             action=action,
             log_prob=self._last_log_prob,
             reward=reward,
             value=self._last_value,
+            next_value=next_value,
             done=done,
             agent_id=id(self),  # identify which PPO instance produced this
         )
         self.total_steps += 1
 
         if len(self.buffer) >= ROLLOUT_LENGTH:
-            self._update(next_state)
+            self._update()
 
-    def _update(self, last_obs: dict):
+    def _update(self):
         """Run PPO update on the collected rollout."""
-        with torch.no_grad():
-            last_state = self._obs_to_tensor(last_obs)
-            _, last_value = self.network(last_state)
-            last_value = last_value.item()
-
-        advantages, returns = self.buffer.compute_gae(
-            last_value, last_agent_id=id(self))
+        advantages, returns = self.buffer.compute_gae()
 
         adv_mean = advantages.mean()
         adv_std = advantages.std() + 1e-8

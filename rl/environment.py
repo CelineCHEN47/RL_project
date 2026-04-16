@@ -161,22 +161,29 @@ class TagEnvironment:
                 reward -= 0.01 * time_scale
 
                 # 3. Distance CHANGE to nearest runner (delta-based)
-                #    Reward getting closer, punish getting farther
+                #    Reward getting closer, punish getting farther.
+                #    Cache stores (runner_id, dist) so a switch of "nearest
+                #    runner" zeroes the delta instead of producing a spurious
+                #    reward from comparing distances to two different targets.
                 min_dist = float("inf")
+                nearest_id = None
                 for other in self.entities:
                     if (other.entity_id == entity.entity_id
                             or other.is_tagger or other.is_eliminated):
                         continue
                     d = entity.distance_to(other)
-                    min_dist = min(min_dist, d)
+                    if d < min_dist:
+                        min_dist = d
+                        nearest_id = other.entity_id
 
-                if min_dist < float("inf"):
-                    # Store last distance for delta computation
-                    prev_dist = getattr(entity, '_prev_tagger_dist', min_dist)
-                    delta = prev_dist - min_dist  # positive = getting closer
-                    max_dist = max(self.level_w, self.level_h)
-                    reward += 1000.0 * (delta / max_dist) * time_scale
-                    entity._prev_tagger_dist = min_dist
+                if nearest_id is not None:
+                    prev = getattr(entity, '_prev_tagger_dist', None)
+                    if prev is not None and prev[0] == nearest_id:
+                        delta = prev[1] - min_dist  # positive = getting closer
+                        max_dist = max(self.level_w, self.level_h)
+                        reward += 1000.0 * (delta / max_dist) * time_scale
+                    # else: first frame OR target switched -> no shaping
+                    entity._prev_tagger_dist = (nearest_id, min_dist)
 
                 # 4. Small movement bonus (prevent standing still)
                 speed = math.sqrt(entity.vx ** 2 + entity.vy ** 2)
