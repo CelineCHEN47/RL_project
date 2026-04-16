@@ -181,7 +181,11 @@ class TagEnvironment:
                     if prev is not None and prev[0] == nearest_id:
                         delta = prev[1] - min_dist  # positive = getting closer
                         max_dist = max(self.level_w, self.level_h)
-                        reward += 1000.0 * (delta / max_dist) * time_scale
+                        # Coefficient reduced from 1000 -> 50 to stop per-frame
+                        # shaping noise (±37/frame at 1000) from drowning out
+                        # the +50 tag reward. At 50, max shaping is ±1.85/frame
+                        # so a single tag is worth ~27 frames of perfect chase.
+                        reward += 50.0 * (delta / max_dist) * time_scale
                     # else: first frame OR target switched -> no shaping
                     entity._prev_tagger_dist = (nearest_id, min_dist)
 
