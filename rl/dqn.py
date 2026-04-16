@@ -217,6 +217,8 @@ class DQN(BaseRLAlgorithm):
     # ------------------------------------------------------------------
     def learn(self, state: dict, action: int, reward: float,
               next_state: dict, done: bool):
+        if self.eval_mode:
+            return
         if self._last_state is None:
             return
 

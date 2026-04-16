@@ -27,12 +27,30 @@ from rl.base_algorithm import BaseRLAlgorithm
 
 # --- Hyperparameters ---
 MAX_OTHER_AGENTS = 6
-# Obs: self_pos(2) + self_vel(2) + is_tagger(1)
-#      + tagger_rel(2) + tagger_dist(1)
-#      + nearest_runner_rel(2) + nearest_runner_dist(1)
-#      + wall_rays(8)
-#      + agents(MAX_OTHER_AGENTS * 4: rel_x, rel_y, dist, is_tagger)
-OBS_DIM = 2 + 2 + 1 + 2 + 1 + 2 + 1 + 8 + MAX_OTHER_AGENTS * 4  # = 43
+
+# Role-specific observation dimensions. When instantiated via DualRoleAlgorithm,
+# the tagger/runner networks only see features relevant to their role — cuts
+# input dim from 43 to 15 (tagger) or 18 (runner), improving sample efficiency.
+#   tagger : self_pos(2) + self_vel(2)
+#          + nearest_runner_rel(2) + nearest_runner_dist(1)
+#          + wall_rays(8)                                               = 15
+#   runner : self_pos(2) + self_vel(2)
+#          + tagger_rel(2) + tagger_dist(1)
+#          + nearest_runner_rel(2) + nearest_runner_dist(1)
+#          + wall_rays(8)                                               = 18
+#   unified: legacy 43-dim encoding (backward compat when role not given)
+TAGGER_OBS_DIM = 2 + 2 + 2 + 1 + 8
+RUNNER_OBS_DIM = 2 + 2 + 2 + 1 + 2 + 1 + 8
+UNIFIED_OBS_DIM = 2 + 2 + 1 + 2 + 1 + 2 + 1 + 8 + MAX_OTHER_AGENTS * 4  # = 43
+
+_OBS_DIM_BY_ROLE = {
+    "tagger": TAGGER_OBS_DIM,
+    "runner": RUNNER_OBS_DIM,
+    "unified": UNIFIED_OBS_DIM,
+}
+
+# Alias kept so any external code that imported OBS_DIM still works.
+OBS_DIM = UNIFIED_OBS_DIM
 HIDDEN_DIM = 128
 LEARNING_RATE = 3e-4
 GAMMA = 0.99
@@ -193,47 +211,67 @@ class RolloutBuffer:
 
 
 class PPO(BaseRLAlgorithm):
-    def __init__(self):
+    def __init__(self, role: str = "unified"):
+        """
+        Args:
+            role: 'tagger', 'runner', or 'unified'.
+                Controls the observation encoding and network input size.
+                DualRoleAlgorithm passes 'tagger'/'runner' for its two
+                sub-algorithms. When instantiated directly, defaults to
+                'unified' (43-dim legacy encoding).
+        """
+        if role not in _OBS_DIM_BY_ROLE:
+            raise ValueError(f"PPO role must be one of {list(_OBS_DIM_BY_ROLE)}, "
+                             f"got {role!r}")
+        self.role = role
+        self.obs_dim = _OBS_DIM_BY_ROLE[role]
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.network = ActorCritic(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(self.device)
+        self.network = ActorCritic(self.obs_dim, self.ACTION_SPACE_SIZE,
+                                   HIDDEN_DIM).to(self.device)
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=LEARNING_RATE)
         self.buffer = RolloutBuffer()
         self.total_steps = 0
 
     def _obs_to_tensor(self, obs: dict) -> torch.Tensor:
-        """Convert ego-centric observation dict to fixed-size tensor."""
-        features = []
-
-        # Self position (2) - absolute, for spatial awareness
-        features.extend(obs["self_pos"])
-
-        # Self velocity (2) - normalized by speed
-        features.append(obs["self_vel"][0] / 3.0)
-        features.append(obs["self_vel"][1] / 3.0)
-
-        # Is tagger (1)
-        features.append(1.0 if obs["is_tagger"] else 0.0)
-
-        # Relative tagger direction + distance (3)
-        features.extend(obs["tagger_rel"])
-        features.append(obs["tagger_dist"])
-
-        # Relative nearest runner direction + distance (3)
-        features.extend(obs["nearest_runner_rel"])
-        features.append(obs["nearest_runner_dist"])
-
-        # Wall raycasts in 8 directions (8)
-        features.extend(obs["wall_rays"])
-
-        # Other agents sorted by distance (MAX_OTHER_AGENTS * 4)
-        other = obs.get("other_agents", [])
-        for i in range(MAX_OTHER_AGENTS):
-            if i < len(other):
-                features.extend(other[i]["rel_pos"])
-                features.append(other[i]["distance"])
-                features.append(1.0 if other[i]["is_tagger"] else 0.0)
-            else:
-                features.extend([0.0, 0.0, 0.0, 0.0])
+        """Convert ego-centric observation dict to role-specific fixed-size tensor."""
+        if self.role == "tagger":
+            features = [
+                obs["self_pos"][0], obs["self_pos"][1],
+                obs["self_vel"][0] / 3.0, obs["self_vel"][1] / 3.0,
+                obs["nearest_runner_rel"][0], obs["nearest_runner_rel"][1],
+                obs["nearest_runner_dist"],
+            ]
+            features.extend(obs["wall_rays"])
+        elif self.role == "runner":
+            features = [
+                obs["self_pos"][0], obs["self_pos"][1],
+                obs["self_vel"][0] / 3.0, obs["self_vel"][1] / 3.0,
+                obs["tagger_rel"][0], obs["tagger_rel"][1],
+                obs["tagger_dist"],
+                obs["nearest_runner_rel"][0], obs["nearest_runner_rel"][1],
+                obs["nearest_runner_dist"],
+            ]
+            features.extend(obs["wall_rays"])
+        else:
+            # Legacy unified encoding (43 dims)
+            features = list(obs["self_pos"])
+            features.append(obs["self_vel"][0] / 3.0)
+            features.append(obs["self_vel"][1] / 3.0)
+            features.append(1.0 if obs["is_tagger"] else 0.0)
+            features.extend(obs["tagger_rel"])
+            features.append(obs["tagger_dist"])
+            features.extend(obs["nearest_runner_rel"])
+            features.append(obs["nearest_runner_dist"])
+            features.extend(obs["wall_rays"])
+            other = obs.get("other_agents", [])
+            for i in range(MAX_OTHER_AGENTS):
+                if i < len(other):
+                    features.extend(other[i]["rel_pos"])
+                    features.append(other[i]["distance"])
+                    features.append(1.0 if other[i]["is_tagger"] else 0.0)
+                else:
+                    features.extend([0.0, 0.0, 0.0, 0.0])
 
         return torch.tensor(features, dtype=torch.float32, device=self.device)
 
@@ -252,6 +290,8 @@ class PPO(BaseRLAlgorithm):
     def learn(self, state: dict, action: int, reward: float,
               next_state: dict, done: bool):
         """Store transition and update when buffer is full."""
+        if self.eval_mode:
+            return
         if not hasattr(self, "_last_state"):
             return
 

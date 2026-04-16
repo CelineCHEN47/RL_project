@@ -66,6 +66,8 @@ class SARSA(BaseRLAlgorithm):
 
     def learn(self, state: dict, action: int, reward: float,
               next_state: dict, done: bool):
+        if self.eval_mode:
+            return
         state_key = self._state_key(state)
         next_state_key = self._state_key(next_state)
 

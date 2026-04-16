@@ -26,8 +26,11 @@ class DualRoleAlgorithm(BaseRLAlgorithm):
             shared_runner: If provided, share weights with this runner algo.
         """
         self.algo_class = algo_class
-        self.tagger_algo = algo_class()
-        self.runner_algo = algo_class()
+        # Pass role= so role-aware algorithms (PPO) can use slim, role-specific
+        # observations. Algorithms that don't accept the kwarg (DQN, tabular)
+        # fall back to their default constructor.
+        self.tagger_algo = _construct_with_role(algo_class, "tagger")
+        self.runner_algo = _construct_with_role(algo_class, "runner")
 
         if shared_tagger is not None:
             _share_weights(self.tagger_algo, shared_tagger)
@@ -78,6 +81,25 @@ class DualRoleAlgorithm(BaseRLAlgorithm):
         """Forward reset to both models."""
         self.tagger_algo.reset()
         self.runner_algo.reset()
+
+    def set_eval(self, enabled: bool) -> None:
+        """Forward eval-mode toggle to both sub-algorithms."""
+        self.eval_mode = enabled
+        self.tagger_algo.set_eval(enabled)
+        self.runner_algo.set_eval(enabled)
+
+
+def _construct_with_role(algo_class, role: str):
+    """Call algo_class(role=role) if the constructor accepts it, else algo_class().
+
+    Role-aware algos (e.g. PPO) use the kwarg to select a slimmer,
+    role-specific observation encoding. Role-agnostic algos (DQN, Q-Learning,
+    SARSA) accept no kwargs, so we fall back to the default constructor.
+    """
+    try:
+        return algo_class(role=role)
+    except TypeError:
+        return algo_class()
 
 
 def _dual_paths(path: str) -> tuple[str, str]:

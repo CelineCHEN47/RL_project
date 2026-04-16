@@ -331,16 +331,16 @@ def evaluate_checkpoint(algo_class, algo_name: str, ckpt_path: str,
     num_agents = len(sim.agents)
 
     # Load checkpoint — DualRoleAlgorithm.load handles _tagger/_runner paths
-    # sim.agents[0].algorithm.load(ckpt_path)
     for agent in sim.agents:
         agent.algorithm.load(ckpt_path)
 
-    # Freeze policy updates during evaluation while keeping dynamics intact.
-    def _eval_no_learn(*_args, **_kwargs):
-        return None
-
+    # Freeze policy updates during evaluation. Setting eval_mode on the
+    # algorithm ensures the flush in Agent.decide_action (which calls
+    # algorithm.learn directly) becomes a true no-op — previously only
+    # agent.learn was monkey-patched, letting zero-reward transitions leak
+    # into the PPO buffer and corrupt the trained network over time.
     for agent in sim.agents:
-        agent.learn = _eval_no_learn
+        agent.algorithm.set_eval(True)
 
     episode_metrics = []
     all_trajectories = []
@@ -489,11 +489,12 @@ def evaluate_role_isolated(algo_class, algo_name: str, ckpt_path: str,
             else:
                 agent.algorithm.load_runner_only(ckpt_path)
 
-    # No learning during evaluation
-    def _no_learn(*_args, **_kwargs):
-        return None
+    # Freeze policy updates: set_eval routes through DualRoleAlgorithm to
+    # both sub-algorithms, so decide_action's flush to algorithm.learn is
+    # a safe no-op. The untrained side is also frozen — untouched weights
+    # stay random-ish for the whole eval.
     for agent in sim.agents:
-        agent.learn = _no_learn
+        agent.algorithm.set_eval(True)
 
     episode_metrics = []
 

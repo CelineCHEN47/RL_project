@@ -36,6 +36,17 @@ class BaseRLAlgorithm(ABC):
         4: (1, 0),    # right
     }
 
+    # Subclasses inherit this default via __init_subclass__-style default
+    # (set in __init__ if they call super, otherwise accessed via getattr
+    # with a False default). Concrete algos check it at the top of learn().
+    eval_mode: bool = False
+
+    def set_eval(self, enabled: bool) -> None:
+        """Toggle eval mode. When True, learn() must become a no-op so that
+        evaluation doesn't corrupt the trained network with zero-reward
+        transitions flushed from Agent.decide_action."""
+        self.eval_mode = enabled
+
     @abstractmethod
     def select_action(self, observation: dict) -> int:
         """Given current observation, return action index 0-4."""
@@ -43,7 +54,8 @@ class BaseRLAlgorithm(ABC):
     @abstractmethod
     def learn(self, state: dict, action: int, reward: float,
               next_state: dict, done: bool):
-        """Update internal model from one transition."""
+        """Update internal model from one transition.
+        Implementations MUST return early when self.eval_mode is True."""
 
     @abstractmethod
     def save(self, path: str):
