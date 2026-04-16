@@ -1,52 +1,102 @@
 [
   {
     "round": 1,
-    "round_tags": 1,
-    "total_tags": 1
+    "round_tags": 3,
+    "total_tags": 3
   },
   {
     "round": 2,
-    "round_tags": 0,
-    "total_tags": 1
-  },
-  {
-    "round": 3,
     "round_tags": 1,
-    "total_tags": 2
-  },
-  {
-    "round": 4,
-    "round_tags": 0,
-    "total_tags": 2
-  },
-  {
-    "round": 5,
-    "round_tags": 0,
-    "total_tags": 2
-  },
-  {
-    "round": 6,
-    "round_tags": 0,
-    "total_tags": 2
-  },
-  {
-    "round": 7,
-    "round_tags": 0,
-    "total_tags": 2
-  },
-  {
-    "round": 8,
-    "round_tags": 2,
     "total_tags": 4
   },
   {
-    "round": 9,
+    "round": 3,
+    "round_tags": 0,
+    "total_tags": 4
+  },
+  {
+    "round": 4,
     "round_tags": 2,
     "total_tags": 6
   },
   {
-    "round": 10,
+    "round": 5,
+    "round_tags": 0,
+    "total_tags": 6
+  },
+  {
+    "round": 6,
+    "round_tags": 0,
+    "total_tags": 6
+  },
+  {
+    "round": 7,
     "round_tags": 1,
     "total_tags": 7
+  },
+  {
+    "round": 8,
+    "round_tags": 0,
+    "total_tags": 7
+  },
+  {
+    "round": 9,
+    "round_tags": 0,
+    "total_tags": 7
+  },
+  {
+    "round": 10,
+    "round_tags": 1,
+    "total_tags": 8
+  },
+  {
+    "round": 11,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 12,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 13,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 14,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 15,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 16,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 17,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 18,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 19,
+    "round_tags": 0,
+    "total_tags": 8
+  },
+  {
+    "round": 20,
+    "round_tags": 0,
+    "total_tags": 8
   }
 ]
