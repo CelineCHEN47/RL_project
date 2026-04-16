@@ -1,191 +1,237 @@
 [
   {
     "round": 1,
-    "tag_count": 1,
+    "tag_count": 2,
     "tagger_id": 0,
-    "mean_tagger_to_nearest_runner": 110.06,
-    "tagger_total_reward": -271.652,
-    "runner_mean_total_reward": -58.587,
+    "mean_tagger_to_nearest_runner": 137.07,
+    "tagger_total_reward": 26.65,
+    "runner_mean_total_reward": -3.579,
     "tag_event_steps": [
-      1095
+      1446,
+      1507
     ]
   },
   {
     "round": 2,
     "tag_count": 0,
-    "tagger_id": 4,
-    "mean_tagger_to_nearest_runner": 263.07,
-    "tagger_total_reward": -934.192,
-    "runner_mean_total_reward": -23.385,
+    "tagger_id": 1,
+    "mean_tagger_to_nearest_runner": 314.35,
+    "tagger_total_reward": -90.137,
+    "runner_mean_total_reward": -59.889,
     "tag_event_steps": []
   },
   {
     "round": 3,
     "tag_count": 0,
-    "tagger_id": 1,
-    "mean_tagger_to_nearest_runner": 160.36,
-    "tagger_total_reward": -1530.296,
-    "runner_mean_total_reward": 48.882,
+    "tagger_id": 5,
+    "mean_tagger_to_nearest_runner": 167.25,
+    "tagger_total_reward": 9.848,
+    "runner_mean_total_reward": -3.294,
     "tag_event_steps": []
   },
   {
     "round": 4,
-    "tag_count": 2,
-    "tagger_id": 5,
-    "mean_tagger_to_nearest_runner": 185.27,
-    "tagger_total_reward": 80.503,
-    "runner_mean_total_reward": 21.496,
-    "tag_event_steps": [
-      112,
-      227
-    ]
+    "tag_count": 0,
+    "tagger_id": 1,
+    "mean_tagger_to_nearest_runner": 152.92,
+    "tagger_total_reward": -56.06,
+    "runner_mean_total_reward": 48.566,
+    "tag_event_steps": []
   },
   {
     "round": 5,
-    "tag_count": 0,
+    "tag_count": 2,
     "tagger_id": 2,
-    "mean_tagger_to_nearest_runner": 263.46,
-    "tagger_total_reward": -674.171,
-    "runner_mean_total_reward": 52.611,
-    "tag_event_steps": []
+    "mean_tagger_to_nearest_runner": 197.87,
+    "tagger_total_reward": 64.491,
+    "runner_mean_total_reward": 21.85,
+    "tag_event_steps": [
+      135,
+      196
+    ]
   },
   {
     "round": 6,
     "tag_count": 0,
-    "tagger_id": 1,
-    "mean_tagger_to_nearest_runner": 263.47,
-    "tagger_total_reward": -1099.529,
-    "runner_mean_total_reward": 35.933,
+    "tagger_id": 0,
+    "mean_tagger_to_nearest_runner": 176.35,
+    "tagger_total_reward": -26.371,
+    "runner_mean_total_reward": 52.144,
     "tag_event_steps": []
   },
   {
     "round": 7,
-    "tag_count": 1,
+    "tag_count": 3,
     "tagger_id": 5,
-    "mean_tagger_to_nearest_runner": 205.06,
-    "tagger_total_reward": -698.457,
-    "runner_mean_total_reward": 40.543,
+    "mean_tagger_to_nearest_runner": 175.89,
+    "tagger_total_reward": 121.445,
+    "runner_mean_total_reward": 2.689,
     "tag_event_steps": [
-      60
+      830,
+      939,
+      1072
     ]
   },
   {
     "round": 8,
-    "tag_count": 0,
-    "tagger_id": 4,
-    "mean_tagger_to_nearest_runner": 192.74,
-    "tagger_total_reward": -647.896,
-    "runner_mean_total_reward": 51.954,
-    "tag_event_steps": []
+    "tag_count": 2,
+    "tagger_id": 0,
+    "mean_tagger_to_nearest_runner": 142.71,
+    "tagger_total_reward": 74.046,
+    "runner_mean_total_reward": 13.692,
+    "tag_event_steps": [
+      60,
+      122
+    ]
   },
   {
     "round": 9,
     "tag_count": 0,
-    "tagger_id": 1,
-    "mean_tagger_to_nearest_runner": 223.26,
-    "tagger_total_reward": -307.552,
-    "runner_mean_total_reward": 48.34,
+    "tagger_id": 4,
+    "mean_tagger_to_nearest_runner": 219.58,
+    "tagger_total_reward": -38.518,
+    "runner_mean_total_reward": 39.868,
     "tag_event_steps": []
   },
   {
     "round": 10,
     "tag_count": 1,
-    "tagger_id": 5,
-    "mean_tagger_to_nearest_runner": 192.6,
-    "tagger_total_reward": -20.71,
-    "runner_mean_total_reward": 40.522,
+    "tagger_id": 1,
+    "mean_tagger_to_nearest_runner": 197.0,
+    "tagger_total_reward": -56.103,
+    "runner_mean_total_reward": 35.439,
     "tag_event_steps": [
-      60
+      149
     ]
   },
   {
     "round": 11,
-    "tag_count": 0,
-    "tagger_id": 1,
-    "mean_tagger_to_nearest_runner": 236.6,
-    "tagger_total_reward": -1007.529,
-    "runner_mean_total_reward": 49.892,
-    "tag_event_steps": []
+    "tag_count": 1,
+    "tagger_id": 0,
+    "mean_tagger_to_nearest_runner": 178.31,
+    "tagger_total_reward": 41.633,
+    "runner_mean_total_reward": 34.166,
+    "tag_event_steps": [
+      1906
+    ]
   },
   {
     "round": 12,
-    "tag_count": 0,
-    "tagger_id": 5,
-    "mean_tagger_to_nearest_runner": 312.12,
-    "tagger_total_reward": -582.018,
-    "runner_mean_total_reward": 51.17,
-    "tag_event_steps": []
+    "tag_count": 7,
+    "tagger_id": 2,
+    "mean_tagger_to_nearest_runner": 94.61,
+    "tagger_total_reward": 350.477,
+    "runner_mean_total_reward": -93.342,
+    "tag_event_steps": [
+      280,
+      341,
+      402,
+      463,
+      1737,
+      1845,
+      1906
+    ]
   },
   {
     "round": 13,
     "tag_count": 0,
-    "tagger_id": 0,
-    "mean_tagger_to_nearest_runner": 283.07,
-    "tagger_total_reward": -969.281,
-    "runner_mean_total_reward": 53.32,
+    "tagger_id": 2,
+    "mean_tagger_to_nearest_runner": 131.38,
+    "tagger_total_reward": -74.356,
+    "runner_mean_total_reward": 49.467,
     "tag_event_steps": []
   },
   {
     "round": 14,
     "tag_count": 0,
-    "tagger_id": 5,
-    "mean_tagger_to_nearest_runner": 220.38,
-    "tagger_total_reward": -349.373,
-    "runner_mean_total_reward": 52.049,
+    "tagger_id": 3,
+    "mean_tagger_to_nearest_runner": 151.89,
+    "tagger_total_reward": -31.573,
+    "runner_mean_total_reward": 46.048,
     "tag_event_steps": []
   },
   {
     "round": 15,
     "tag_count": 0,
-    "tagger_id": 2,
-    "mean_tagger_to_nearest_runner": 319.13,
-    "tagger_total_reward": -554.643,
-    "runner_mean_total_reward": 52.758,
+    "tagger_id": 4,
+    "mean_tagger_to_nearest_runner": 137.2,
+    "tagger_total_reward": -56.731,
+    "runner_mean_total_reward": 46.153,
     "tag_event_steps": []
   },
   {
     "round": 16,
-    "tag_count": 0,
+    "tag_count": 4,
     "tagger_id": 3,
-    "mean_tagger_to_nearest_runner": 207.91,
-    "tagger_total_reward": -461.065,
-    "runner_mean_total_reward": 52.286,
-    "tag_event_steps": []
+    "mean_tagger_to_nearest_runner": 132.55,
+    "tagger_total_reward": 164.681,
+    "runner_mean_total_reward": -17.841,
+    "tag_event_steps": [
+      1184,
+      1245,
+      1306,
+      1406
+    ]
   },
   {
     "round": 17,
-    "tag_count": 0,
-    "tagger_id": 3,
-    "mean_tagger_to_nearest_runner": 272.21,
-    "tagger_total_reward": -929.195,
-    "runner_mean_total_reward": 48.553,
-    "tag_event_steps": []
+    "tag_count": 6,
+    "tagger_id": 1,
+    "mean_tagger_to_nearest_runner": 64.76,
+    "tagger_total_reward": 274.961,
+    "runner_mean_total_reward": -131.51,
+    "tag_event_steps": [
+      194,
+      1166,
+      1368,
+      1492,
+      1554,
+      1615
+    ]
   },
   {
     "round": 18,
-    "tag_count": 0,
-    "tagger_id": 1,
-    "mean_tagger_to_nearest_runner": 268.32,
-    "tagger_total_reward": -271.933,
-    "runner_mean_total_reward": 52.557,
-    "tag_event_steps": []
+    "tag_count": 10,
+    "tagger_id": 3,
+    "mean_tagger_to_nearest_runner": 62.96,
+    "tagger_total_reward": 502.639,
+    "runner_mean_total_reward": -189.885,
+    "tag_event_steps": [
+      1119,
+      1180,
+      1241,
+      1336,
+      1407,
+      1474,
+      1535,
+      1599,
+      1660,
+      1721
+    ]
   },
   {
     "round": 19,
-    "tag_count": 0,
-    "tagger_id": 2,
-    "mean_tagger_to_nearest_runner": 233.77,
-    "tagger_total_reward": -793.553,
-    "runner_mean_total_reward": 51.805,
-    "tag_event_steps": []
+    "tag_count": 1,
+    "tagger_id": 1,
+    "mean_tagger_to_nearest_runner": 166.98,
+    "tagger_total_reward": 34.319,
+    "runner_mean_total_reward": 39.176,
+    "tag_event_steps": [
+      95
+    ]
   },
   {
     "round": 20,
-    "tag_count": 0,
-    "tagger_id": 0,
-    "mean_tagger_to_nearest_runner": 271.22,
-    "tagger_total_reward": -1114.807,
-    "runner_mean_total_reward": 50.981,
-    "tag_event_steps": []
+    "tag_count": 4,
+    "tagger_id": 3,
+    "mean_tagger_to_nearest_runner": 101.41,
+    "tagger_total_reward": 171.102,
+    "runner_mean_total_reward": -10.752,
+    "tag_event_steps": [
+      1811,
+      1872,
+      1933,
+      1994
+    ]
   }
 ]

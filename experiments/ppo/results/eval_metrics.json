@@ -2,11 +2,11 @@
   {
     "checkpoint": "experiments\\ppo\\checkpoints\\ppo_epoch_20.pt",
     "num_episodes": 20,
-    "mean_tags": 2.6,
-    "std_tags": 4.862098312457287,
+    "mean_tags": 4.0,
+    "std_tags": 4.764451699828638,
     "min_tags": 0,
-    "max_tags": 17,
-    "total_tags": 52,
+    "max_tags": 12,
+    "total_tags": 80,
     "epoch": 20
   }
 ]

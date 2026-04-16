@@ -5,17 +5,17 @@
       "role": "tagger",
       "epoch": 20,
       "num_episodes": 20,
-      "mean_tags": 1.9,
-      "std_tags": 2.4677925358506134,
-      "mean_steps_between_tags": 1032.6716666666666
+      "mean_tags": 0.55,
+      "std_tags": 1.2439855304624727,
+      "mean_steps_between_tags": 1550.77
     },
     "runner": {
       "role": "runner",
       "epoch": 20,
       "num_episodes": 20,
-      "mean_tags": 2.2,
-      "std_tags": 3.6000000000000005,
-      "mean_steps_between_tags": 1293.8128571428572
+      "mean_tags": 0.25,
+      "std_tags": 0.5361902647381804,
+      "mean_steps_between_tags": 1641.95
     }
   }
 ]
