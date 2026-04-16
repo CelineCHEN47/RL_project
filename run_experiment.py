@@ -87,9 +87,15 @@ def get_algo_class(algo_name: str):
     return getattr(module, class_name)
 
 
-def checkpoint_path(save_dir: str, algo_name: str, epoch: int) -> str:
+def checkpoint_path(save_dir: str, algo_name: str, epoch) -> str:
+    """Build a checkpoint path. `epoch` is an int (milestone) or a string tag
+    like 'best' (for the best-so-far checkpoint)."""
     safe_name = algo_name.lower().replace("-", "_").replace(" ", "_")
-    return os.path.join(save_dir, "checkpoints", f"{safe_name}_epoch_{epoch}.pt")
+    if isinstance(epoch, int):
+        fname = f"{safe_name}_epoch_{epoch}.pt"
+    else:
+        fname = f"{safe_name}_{epoch}.pt"
+    return os.path.join(save_dir, "checkpoints", fname)
 
 
 def get_save_dir(algo_name: str) -> str:
@@ -229,6 +235,14 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
     total_tags = 0
     t_start = time.time()
 
+    # Track best-so-far checkpoint. PPO policy oscillates between rounds
+    # (observed: round 8 = 20 tags, round 9 = 0 tags, round 20 = 0 tags).
+    # Without this, --eval_only can end up evaluating a round-20 regression
+    # instead of the policy's actual peak. Ties broken by "earliest wins".
+    best_round_tags = -1
+    best_round = None
+    best_path = checkpoint_path(save_dir, algo_name, "best")
+
     for round_num in range(1, max_epoch + 1):
         round_tags = 0
 
@@ -292,6 +306,12 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
             first_sim.agents[0].algorithm.save(path)
             print(f"  >> Checkpoint saved: {path}")
 
+        if round_tags > best_round_tags:
+            best_round_tags = round_tags
+            best_round = round_num
+            first_sim.agents[0].algorithm.save(best_path)
+            print(f"  >> New best: {round_tags} tags @ round {round_num} -> {best_path}")
+
         if skip:
             for ep in sorted(epochs):
                 if ep > round_num:
@@ -302,7 +322,12 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
             break
 
     total_time = time.time() - t_start
-    print(f"\n  Training complete. Total time: {total_time:.1f}s\n")
+    print(f"\n  Training complete. Total time: {total_time:.1f}s")
+    if best_round is not None:
+        print(f"  Best round: {best_round} with {best_round_tags} tags "
+              f"(checkpoint: {best_path})\n")
+    else:
+        print()
 
     log_path = os.path.join(save_dir, "training_log.json")
     with open(log_path, "w") as f:
@@ -415,20 +440,23 @@ def run_evaluations(algo_class, algo_name: str, epochs: list[int],
     print("=" * 65)
 
     all_metrics = []
+    from rl.dual_role import dual_model_exists
 
-    for epoch in sorted(epochs):
+    # Evaluate scheduled epoch milestones + the best-so-far checkpoint
+    # (so eval captures peak training performance, not just the last round)
+    eval_targets: list = sorted(epochs) + ["best"]
+
+    for epoch in eval_targets:
         ckpt = checkpoint_path(save_dir, algo_name, epoch)
-        # Check for both single and dual-role checkpoint files
-        from rl.dual_role import dual_model_exists
         if not os.path.exists(ckpt) and not dual_model_exists(ckpt):
             print(f"  [SKIP] Not found: {ckpt}")
             continue
 
-        print(f"\n  Evaluating epoch {epoch}...")
+        print(f"\n  Evaluating {'epoch ' + str(epoch) if isinstance(epoch, int) else epoch}...")
         if display_mgr:
             import pygame
             pygame.display.set_caption(
-                f"{algo_name} Experiment — Eval Epoch {epoch}"
+                f"{algo_name} Experiment — Eval {epoch}"
             )
 
         metrics, trajectories = evaluate_checkpoint(
@@ -579,13 +607,16 @@ def run_role_evaluations(algo_class, algo_name: str, epochs: list[int],
 
     all_role_metrics = []
 
-    for epoch in sorted(epochs):
+    # Evaluate scheduled epoch milestones + the best-so-far checkpoint
+    eval_targets: list = sorted(epochs) + ["best"]
+
+    for epoch in eval_targets:
         ckpt = checkpoint_path(save_dir, algo_name, epoch)
         if not dual_model_exists(ckpt):
-            print(f"  [SKIP] No dual checkpoint for epoch {epoch}")
+            print(f"  [SKIP] No dual checkpoint for {epoch}")
             continue
 
-        print(f"\n  Epoch {epoch}:")
+        print(f"\n  {'Epoch ' + str(epoch) if isinstance(epoch, int) else epoch}:")
 
         # Test 1: Trained tagger vs untrained runners
         if display_mgr:

@@ -82,11 +82,6 @@ class HeadlessSimulation:
         half = agent.ENTITY_SIZE // 2
         agent.rect.x = int(agent.x) - half
         agent.rect.y = int(agent.y) - half
-        # Clear delta-reward distance cache so first step after respawn
-        # doesn't produce a spurious large delta.
-        for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
-            if hasattr(agent, attr):
-                delattr(agent, attr)
 
     def step(self) -> dict | None:
         """Run one game step. Returns tag_event if a tag occurred."""
@@ -128,15 +123,6 @@ class HeadlessSimulation:
         # --- Respawn tagged runner to a random spawn point ---
         if tag_event:
             self.total_tags += 1
-            # Clear ALL agents' distance cache — the respawn changes the
-            # distance landscape for everyone.  Without this the tagger
-            # sees a huge negative delta (prev_dist was ~24px, new closest
-            # runner is ~200px) and gets punished for a successful tag.
-            for agent in self.agents:
-                for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
-                    if hasattr(agent, attr):
-                        delattr(agent, attr)
-
             tagged_id = tag_event["tagged_id"]
             for agent in self.agents:
                 if agent.entity_id == tagged_id:
@@ -180,9 +166,6 @@ class HeadlessSimulation:
             agent.last_observation = None
             agent._pending_reward = 0.0
             agent._pending_done = False
-            for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
-                if hasattr(agent, attr):
-                    delattr(agent, attr)
 
         self.movable_objects.clear()
         for cp in self.level.crate_spawns:
