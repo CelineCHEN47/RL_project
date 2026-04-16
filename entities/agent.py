@@ -80,6 +80,9 @@ class Agent(Entity):
                 )
                 self._pending_reward = 0.0
                 self._pending_done = False
+                # Clear last_observation so the next decision frame does NOT
+                # re-flush a spurious (pre-tag → post-respawn) transition.
+                self.last_observation = None
             return
 
         # Decision frame rewards belong to the *new* action selected this frame.

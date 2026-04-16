@@ -124,6 +124,15 @@ class HeadlessSimulation:
         # --- Respawn tagged runner to a random spawn point ---
         if tag_event:
             self.total_tags += 1
+            # Clear ALL agents' distance cache — the respawn changes the
+            # distance landscape for everyone.  Without this the tagger
+            # sees a huge negative delta (prev_dist was ~24px, new closest
+            # runner is ~200px) and gets punished for a successful tag.
+            for agent in self.agents:
+                for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
+                    if hasattr(agent, attr):
+                        delattr(agent, attr)
+
             tagged_id = tag_event["tagged_id"]
             for agent in self.agents:
                 if agent.entity_id == tagged_id:
@@ -136,6 +145,20 @@ class HeadlessSimulation:
 
     def reset(self):
         """Reset positions and tagger for a new episode."""
+        # Flush each agent's last pending transition as a terminal (done=True)
+        # so the reward for their final action isn't silently discarded and
+        # the algorithm sees a clean episode boundary.
+        for agent in self.agents:
+            if agent.last_observation is not None and agent._pending_reward != 0.0:
+                obs = self.rl_env.get_observation(agent)
+                agent.algorithm.learn(
+                    agent.last_observation,
+                    agent.last_action,
+                    agent._pending_reward,
+                    obs,
+                    True,  # done — episode boundary
+                )
+
         spawn_points = list(self.level.spawn_points)
         random.shuffle(spawn_points)
 

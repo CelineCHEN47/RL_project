@@ -174,6 +174,22 @@ class GameManager:
 
     def _reset_round(self):
         """Respawn everyone and restart round state, keeping learned models."""
+        # Flush each agent's last pending transition as a terminal (done=True)
+        # so the reward for their final action isn't silently discarded.
+        for agent in self.agents:
+            if (hasattr(agent, 'last_observation')
+                    and agent.last_observation is not None
+                    and hasattr(agent, '_pending_reward')
+                    and agent._pending_reward != 0.0):
+                obs = self.rl_env.get_observation(agent)
+                agent.algorithm.learn(
+                    agent.last_observation,
+                    agent.last_action,
+                    agent._pending_reward,
+                    obs,
+                    True,
+                )
+
         spawn_points = list(self.level.spawn_points)
         random.shuffle(spawn_points)
 
@@ -278,6 +294,14 @@ class GameManager:
 
         # Respawn tagged runner (works for both player and agents)
         if tag_event:
+            # Clear ALL agents' distance cache — the respawn changes the
+            # distance landscape for everyone.  Without this the tagger
+            # sees a huge negative delta and gets punished for a successful tag.
+            for entity in self.entities:
+                for attr in ('_prev_tagger_dist', '_prev_runner_dist'):
+                    if hasattr(entity, attr):
+                        delattr(entity, attr)
+
             tagged_id = tag_event["tagged_id"]
             for entity in self.entities:
                 if entity.entity_id == tagged_id:
