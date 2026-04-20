@@ -71,3 +71,11 @@ RL_ALGORITHMS = {
     "PPO": ("rl.ppo", "PPO"),
     "DQN": ("rl.dqn", "DQN"),
 }
+
+# Level registry: display name -> map filename
+LEVELS = {
+    "Small":  "level_small.txt",
+    "Medium": "level_median.txt",
+    "Large":  "level_01.txt",
+}
+DEFAULT_LEVEL = "Small"

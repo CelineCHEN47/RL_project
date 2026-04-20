@@ -59,37 +59,40 @@ class HUD:
         self.screen.blit(fps_text, (sw - fps_text.get_width() - 12,
                                     bar_h // 2 - fps_text.get_height() // 2))
 
-        # Scoreboard panel (top-right, below bar)
-        panel_w = 150
-        panel_x = sw - panel_w - 10
-        panel_y = bar_h + 10
+        # Compact scoreboard — single horizontal row directly below the top bar
         alive_entities = [e for e in entities if not e.is_eliminated]
-        panel_h = 28 + len(alive_entities) * 22
+        if alive_entities:
+            row_h = 22
+            row_surf = pygame.Surface((sw, row_h), pygame.SRCALPHA)
+            row_surf.fill((15, 15, 25, 160))
+            self.screen.blit(row_surf, (0, bar_h))
 
-        panel_surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        panel_surf.fill((15, 15, 25, 180))
-        self.screen.blit(panel_surf, (panel_x, panel_y))
-        pygame.draw.rect(self.screen, (60, 60, 90),
-                         (panel_x, panel_y, panel_w, panel_h), 1, border_radius=4)
+            # Build score entries: "P:0  A1:2  A2:1  ..."
+            entries = []
+            for e in alive_entities:
+                if getattr(e, "is_human", False):
+                    name = "P"
+                else:
+                    name = f"A{e.entity_id}"
+                entries.append((name, e.tag_count, e.is_tagger))
 
-        title = self.font_bold.render("Scoreboard", True, (200, 200, 220))
-        self.screen.blit(title, (panel_x + panel_w // 2 - title.get_width() // 2,
-                                 panel_y + 4))
+            # Render and center as a single row
+            font_small = pygame.font.SysFont("Arial", 13, bold=True)
+            gap = 14
+            chunks = []
+            total_w = 0
+            for name, count, is_tagger in entries:
+                color = (255, 130, 130) if is_tagger else (160, 200, 230)
+                surf = font_small.render(f"{name}:{count}", True, color)
+                chunks.append(surf)
+                total_w += surf.get_width() + gap
+            total_w -= gap
 
-        y_off = panel_y + 28
-        for e in alive_entities:
-            name = "You" if getattr(e, "is_human", False) else f"Agent {e.entity_id}"
-            if e.is_tagger:
-                dot_color = (220, 60, 60)
-                text_color = (255, 150, 150)
-            else:
-                dot_color = (60, 140, 220)
-                text_color = (180, 200, 230)
-
-            pygame.draw.circle(self.screen, dot_color, (panel_x + 14, y_off + 8), 4)
-            entry = self.font.render(f"{name}: {e.tag_count}", True, text_color)
-            self.screen.blit(entry, (panel_x + 24, y_off))
-            y_off += 22
+            x = (sw - total_w) // 2
+            y = bar_h + (row_h - chunks[0].get_height()) // 2
+            for surf in chunks:
+                self.screen.blit(surf, (x, y))
+                x += surf.get_width() + gap
 
         # Bottom hint bar
         hint_h = 26

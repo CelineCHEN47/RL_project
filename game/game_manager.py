@@ -33,6 +33,7 @@ class GameManager:
         self.mode = config.GameMode.PLAYER_MODE
         self.train_mode = config.TrainMode.TRAIN_LIVE
         self.selected_algorithm = "PPO"
+        self.selected_level = config.DEFAULT_LEVEL
 
         self.menu = Menu(screen)
         self.renderer = Renderer(screen)
@@ -69,6 +70,7 @@ class GameManager:
                 self.mode = result["mode"]
                 self.selected_algorithm = result["algorithm"]
                 self.train_mode = result["train_mode"]
+                self.selected_level = result.get("level", config.DEFAULT_LEVEL)
                 self._init_game()
                 self.state = config.GameState.PLAYING
 
@@ -83,6 +85,13 @@ class GameManager:
                 return False
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.state = config.GameState.MENU
+                # Restore the menu-sized window
+                self.screen = pygame.display.set_mode(
+                    (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+                self.renderer.screen = self.screen
+                self.hud.screen = self.screen
+                self.menu.screen = self.screen
+                self.menu._build_buttons()
                 return True
 
         self._update()
@@ -95,10 +104,20 @@ class GameManager:
     def _init_game(self):
         """Set up a new game session."""
         self.tick = 0
-        self.level = Level("level_small.txt")
+        level_file = config.LEVELS.get(self.selected_level, "level_01.txt")
+        self.level = Level(level_file)
         self.entities = []
         self.agents = []
         self.movable_objects = []
+
+        # Resize window to fit the level (cap at original screen size)
+        lw, lh = self.level.get_pixel_dimensions()
+        win_w = min(lw, config.SCREEN_WIDTH)
+        win_h = min(lh, config.SCREEN_HEIGHT)
+        self.screen = pygame.display.set_mode((win_w, win_h))
+        # Renderer holds a reference to the old screen — refresh it
+        self.renderer.screen = self.screen
+        self.hud.screen = self.screen
 
         # Load the selected RL algorithm class
         algo_module_path, algo_class_name = config.RL_ALGORITHMS[self.selected_algorithm]
