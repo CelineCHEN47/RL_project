@@ -13,11 +13,12 @@ TILE_SIZE = 32
 # Gameplay
 PLAYER_SPEED = 3.0
 AGENT_SPEED = 3.0          # default / fallback (e.g. human player, pre-role-assignment)
-TAGGER_SPEED = 5.0         # tagger clearly faster so optimal chase closes distance ~2 px/frame
 RUNNER_SPEED = 3.0
-TAG_RADIUS = 24
-TAG_COOLDOWN_MS = 0             # cooldown disabled — tagger can re-tag every frame
-TAG_COOLDOWN_FRAMES = 0         # frame-based cooldown (= TAG_COOLDOWN_MS / (1000/FPS))
+TAGGER_SPEED = RUNNER_SPEED  # keep role speeds matched for equal-speed ablations
+# Fixed best PPO ablation parameters (portable across devices)
+TAG_RADIUS = 32.0
+TAG_COOLDOWN_FRAMES = 5
+TAG_COOLDOWN_MS = int(1000 * TAG_COOLDOWN_FRAMES / FPS)
 CRATE_PUSH_SPEED = 2.0
 NUM_AGENTS = 4
 AUTO_RESET_ON_ONE_LEFT = True

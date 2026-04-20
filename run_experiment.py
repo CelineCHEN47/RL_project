@@ -34,18 +34,19 @@ import argparse
 import importlib
 import json
 import os
+import random
 import sys
 import time
 
 # ======================================================================
 # Default experiment configuration
 # ======================================================================
-DEFAULT_EPOCHS   = [10, 50, 100, 200, 500, 1000]
-STEPS_PER_ROUND  = 2000
-PARALLEL_SIMS    = 2
-EVAL_EPISODES    = 20
-EVAL_STEPS       = 2000
-LOG_INTERVAL     = 5
+DEFAULT_EPOCHS = [10, 50, 100, 200, 500, 1000]
+STEPS_PER_ROUND = 2000
+PARALLEL_SIMS = 2
+EVAL_EPISODES = 20
+EVAL_STEPS = 2000
+LOG_INTERVAL = 5
 
 
 # ======================================================================
@@ -101,6 +102,23 @@ def checkpoint_path(save_dir: str, algo_name: str, epoch) -> str:
 def get_save_dir(algo_name: str) -> str:
     safe_name = algo_name.lower().replace("-", "_").replace(" ", "_")
     return os.path.join("experiments", safe_name)
+
+
+def set_global_seed(seed: int):
+    """Set deterministic RNG seeds for evaluation reproducibility."""
+    random.seed(seed)
+    try:
+        import numpy as np
+        np.random.seed(seed)
+    except Exception:
+        pass
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except Exception:
+        pass
 
 
 # ======================================================================
@@ -188,7 +206,9 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
                            save_dir: str,
                            display_mgr: DisplayManager | None,
                            parallel_sims: int,
-                           trace_decimation: int = 10):
+                           trace_decimation: int = 10,
+                           steps_per_round: int = STEPS_PER_ROUND,
+                           log_interval: int = LOG_INTERVAL):
     import config
     from game.simulation import HeadlessSimulation
     from rl.recorder import TrainingRecorder
@@ -226,7 +246,7 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
     print(f"  PHASE 1: Training {algo_name}  (max {max_epoch} rounds)")
     print(f"  Role mode: {role_mode}")
     print(f"  Checkpoints at: {sorted(epochs)}")
-    print(f"  Parallel sims: {parallel_sims}, Steps/round: {STEPS_PER_ROUND}")
+    print(f"  Parallel sims: {parallel_sims}, Steps/round: {steps_per_round}")
     print(f"  Agents per sim: {num_agents}")
     if display_mgr:
         print(f"  Display: ON  (ESC = skip to evaluation)")
@@ -254,7 +274,7 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
             recorder.start_round(round_num, sims[0])
 
         skip = False
-        for step in range(STEPS_PER_ROUND):
+        for step in range(steps_per_round):
             for idx, sim in enumerate(sims):
                 tag_event = sim.step()
                 if idx == 0 and recorder:
@@ -274,7 +294,7 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
                 )
                 display_mgr.set_hud([
                     f"TRAINING {algo_name} — Round {round_num}/{max_epoch}  "
-                    f"Step {step+1}/{STEPS_PER_ROUND}",
+                    f"Step {step+1}/{steps_per_round}",
                     f"Round tags: {round_tags}  |  "
                     f"Total tags: {total_tags + round_tags}",
                     f"Next checkpoint: epoch {next_ckpt or '—'}",
@@ -292,9 +312,9 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
         })
 
         if recorder:
-            recorder.end_round(sims[0], STEPS_PER_ROUND)
+            recorder.end_round(sims[0], steps_per_round)
 
-        if round_num % LOG_INTERVAL == 0 or round_num == 1:
+        if round_num % log_interval == 0 or round_num == 1:
             elapsed = time.time() - t_start
             print(f"  Round {round_num:>5}/{max_epoch}  |  "
                   f"Tags: {round_tags:>4}  |  "
@@ -348,9 +368,13 @@ def train_with_checkpoints(algo_class, algo_name: str, epochs: list[int],
 def evaluate_checkpoint(algo_class, algo_name: str, ckpt_path: str,
                         num_episodes: int, steps_per_episode: int,
                         display_mgr: DisplayManager | None,
-                        epoch_label: str = ""):
+                        epoch_label: str = "",
+                        seed: int | None = None):
     from game.simulation import HeadlessSimulation
     import numpy as np
+
+    if seed is not None:
+        set_global_seed(seed)
 
     sim = HeadlessSimulation(algo_class)
     num_agents = len(sim.agents)
@@ -424,7 +448,8 @@ def evaluate_checkpoint(algo_class, algo_name: str, ckpt_path: str,
 
 def run_evaluations(algo_class, algo_name: str, epochs: list[int],
                     save_dir: str, display_mgr: DisplayManager | None,
-                    eval_episodes: int):
+                    eval_episodes: int, eval_seed: int | None = None,
+                    eval_steps: int = EVAL_STEPS):
     results_dir = os.path.join(save_dir, "results")
     traj_dir = os.path.join(save_dir, "trajectories")
     os.makedirs(results_dir, exist_ok=True)
@@ -434,7 +459,9 @@ def run_evaluations(algo_class, algo_name: str, epochs: list[int],
     print(f"  PHASE 2: Evaluating {algo_name} checkpoints")
     print(f"  Epochs: {sorted(epochs)}")
     print(f"  Episodes per checkpoint: {eval_episodes}")
-    print(f"  Steps per episode: {EVAL_STEPS}")
+    print(f"  Steps per episode: {eval_steps}")
+    if eval_seed is not None:
+        print(f"  Eval seed: {eval_seed}")
     if display_mgr:
         print(f"  Display: ON  (ESC = skip current epoch)")
     print("=" * 65)
@@ -460,8 +487,8 @@ def run_evaluations(algo_class, algo_name: str, epochs: list[int],
             )
 
         metrics, trajectories = evaluate_checkpoint(
-            algo_class, algo_name, ckpt, eval_episodes, EVAL_STEPS,
-            display_mgr, epoch_label=str(epoch),
+            algo_class, algo_name, ckpt, eval_episodes, eval_steps,
+            display_mgr, epoch_label=str(epoch), seed=eval_seed,
         )
         metrics["epoch"] = epoch
         all_metrics.append(metrics)
@@ -492,7 +519,8 @@ def evaluate_role_isolated(algo_class, algo_name: str, ckpt_path: str,
                            role: str, num_episodes: int,
                            steps_per_episode: int,
                            display_mgr: DisplayManager | None,
-                           epoch_label: str = ""):
+                           epoch_label: str = "",
+                           seed: int | None = None):
     """Evaluate one role in isolation.
 
     Args:
@@ -505,6 +533,9 @@ def evaluate_role_isolated(algo_class, algo_name: str, ckpt_path: str,
     from game.simulation import HeadlessSimulation
     from rl.dual_role import DualRoleAlgorithm
     import numpy as np
+
+    if seed is not None:
+        set_global_seed(seed)
 
     sim = HeadlessSimulation(algo_class)
     num_agents = len(sim.agents)
@@ -584,7 +615,8 @@ def evaluate_role_isolated(algo_class, algo_name: str, ckpt_path: str,
 
 def run_role_evaluations(algo_class, algo_name: str, epochs: list[int],
                          save_dir: str, display_mgr: DisplayManager | None,
-                         eval_episodes: int):
+                         eval_episodes: int, eval_seed: int | None = None,
+                         eval_steps: int = EVAL_STEPS):
     """Run isolated tagger and runner evaluations for each checkpoint."""
     from rl.dual_role import dual_model_exists
     import config
@@ -600,6 +632,8 @@ def run_role_evaluations(algo_class, algo_name: str, epochs: list[int],
     print(f"  PHASE 2b: Isolated Role Evaluation ({algo_name})")
     print(f"  Epochs: {sorted(epochs)}")
     print(f"  Episodes per test: {eval_episodes}")
+    if eval_seed is not None:
+        print(f"  Eval seed: {eval_seed}")
     print(f"  Tests per epoch:")
     print(f"    - Trained TAGGER vs untrained runners (more tags = better)")
     print(f"    - Trained RUNNERS vs untrained tagger (fewer tags = better)")
@@ -626,7 +660,7 @@ def run_role_evaluations(algo_class, algo_name: str, epochs: list[int],
 
         tagger_metrics = evaluate_role_isolated(
             algo_class, algo_name, ckpt, "tagger",
-            eval_episodes, EVAL_STEPS, display_mgr, str(epoch))
+            eval_episodes, eval_steps, display_mgr, str(epoch), seed=eval_seed)
         tagger_metrics["epoch"] = epoch
 
         print(f"    Trained TAGGER vs random runners: "
@@ -643,7 +677,7 @@ def run_role_evaluations(algo_class, algo_name: str, epochs: list[int],
 
         runner_metrics = evaluate_role_isolated(
             algo_class, algo_name, ckpt, "runner",
-            eval_episodes, EVAL_STEPS, display_mgr, str(epoch))
+            eval_episodes, eval_steps, display_mgr, str(epoch), seed=eval_seed)
         runner_metrics["epoch"] = epoch
 
         print(f"    Trained RUNNERS vs random tagger: "
@@ -759,6 +793,130 @@ def generate_plots(algo_name: str, save_dir: str, training_log: list | None,
         plt.close(fig)
         print(f"  Saved: {plots_dir}/role_evaluation.png")
 
+        # --- Role trends (runner-focused diagnostic) ---
+        # This view makes runner behavior easier to inspect over checkpoints.
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(f"{algo_name} — Role Trends (Runner Focus)", fontsize=14)
+
+        x = np.arange(len(ep_list))
+        labels = [str(e) for e in ep_list]
+        runner_tags = [m["runner"]["mean_tags"] for m in role_metrics]
+        tagger_tags = [m["tagger"]["mean_tags"] for m in role_metrics]
+        runner_steps = [m["runner"]["mean_steps_between_tags"] for m in role_metrics]
+        tagger_steps = [m["tagger"]["mean_steps_between_tags"] for m in role_metrics]
+
+        # Left: mean tags (runner lower is better, tagger higher is better)
+        ax1.plot(x, runner_tags, marker="o", color=(0.3, 0.5, 0.85),
+                 linewidth=2, label="Runner test tags (lower better)")
+        ax1.plot(x, tagger_tags, marker="o", color=(0.85, 0.3, 0.3),
+                 linewidth=2, label="Tagger test tags (higher better)")
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(labels)
+        ax1.set_xlabel("Checkpoint Epoch")
+        ax1.set_ylabel("Mean Tags")
+        ax1.set_title("Role Tags by Checkpoint")
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(fontsize=8)
+
+        # Right: mean steps between tags (higher means fewer tags)
+        ax2.plot(x, runner_steps, marker="s", color=(0.3, 0.5, 0.85),
+                 linewidth=2, label="Runner test steps/tag")
+        ax2.plot(x, tagger_steps, marker="s", color=(0.85, 0.3, 0.3),
+                 linewidth=2, label="Tagger test steps/tag")
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(labels)
+        ax2.set_xlabel("Checkpoint Epoch")
+        ax2.set_ylabel("Mean Steps Between Tags")
+        ax2.set_title("Role Steps/Tag by Checkpoint")
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(fontsize=8)
+
+        fig.tight_layout()
+        fig.savefig(os.path.join(plots_dir, "role_trends_runner_focus.png"), dpi=150)
+        plt.close(fig)
+        print(f"  Saved: {plots_dir}/role_trends_runner_focus.png")
+
+        # --- Role trends (tagger-focused diagnostic) ---
+        # Same style as runner-focus, but centered on pursuit quality.
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(f"{algo_name} — Role Trends (Tagger Focus)", fontsize=14)
+
+        x = np.arange(len(ep_list))
+        labels = [str(e) for e in ep_list]
+        runner_tags = [m["runner"]["mean_tags"] for m in role_metrics]
+        tagger_tags = [m["tagger"]["mean_tags"] for m in role_metrics]
+        runner_steps = [m["runner"]["mean_steps_between_tags"] for m in role_metrics]
+        tagger_steps = [m["tagger"]["mean_steps_between_tags"] for m in role_metrics]
+
+        # Left: pursuit/escape tags trend.
+        ax1.plot(x, tagger_tags, marker="o", color=(0.85, 0.3, 0.3),
+                 linewidth=2, label="Tagger test tags (higher better)")
+        ax1.plot(x, runner_tags, marker="o", color=(0.3, 0.5, 0.85),
+                 linewidth=2, label="Runner test tags (lower better)")
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(labels)
+        ax1.set_xlabel("Checkpoint Epoch")
+        ax1.set_ylabel("Mean Tags")
+        ax1.set_title("Tagger-Centric Tag Outcomes")
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(fontsize=8)
+
+        # Right: catch efficiency (events per 1000 steps).
+        tagger_eff = [1000.0 / max(s, 1e-6) for s in tagger_steps]
+        runner_eff = [1000.0 / max(s, 1e-6) for s in runner_steps]
+        ax2.plot(x, tagger_eff, marker="s", color=(0.85, 0.3, 0.3),
+                 linewidth=2, label="Tagger test catch rate")
+        ax2.plot(x, runner_eff, marker="s", color=(0.3, 0.5, 0.85),
+                 linewidth=2, label="Runner test catch rate")
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(labels)
+        ax2.set_xlabel("Checkpoint Epoch")
+        ax2.set_ylabel("Tags per 1000 Steps")
+        ax2.set_title("Tagger Catch Efficiency")
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(fontsize=8)
+
+        fig.tight_layout()
+        fig.savefig(os.path.join(plots_dir, "role_trends_tagger_focus.png"), dpi=150)
+        plt.close(fig)
+        print(f"  Saved: {plots_dir}/role_trends_tagger_focus.png")
+
+        # --- Role diagnostics ---
+        # Helps detect role imbalance and noisy checkpoints quickly.
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig.suptitle(f"{algo_name} — Role Diagnostics", fontsize=14)
+
+        tagger_stds = [m["tagger"]["std_tags"] for m in role_metrics]
+        runner_stds = [m["runner"]["std_tags"] for m in role_metrics]
+        advantage = [t - r for t, r in zip(tagger_tags, runner_tags)]
+
+        ax1.axhline(0.0, color="gray", linestyle="--", linewidth=1)
+        ax1.plot(x, advantage, marker="o", color="purple", linewidth=2)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(labels)
+        ax1.set_xlabel("Checkpoint Epoch")
+        ax1.set_ylabel("Tagger - Runner Mean Tags")
+        ax1.set_title("Role Advantage Index (>0 favors tagger)")
+        ax1.grid(True, alpha=0.3)
+
+        width = 0.35
+        ax2.bar(x - width / 2, tagger_stds, width=width, color=(0.85, 0.3, 0.3),
+                alpha=0.8, label="Tagger std(tags)")
+        ax2.bar(x + width / 2, runner_stds, width=width, color=(0.3, 0.5, 0.85),
+                alpha=0.8, label="Runner std(tags)")
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(labels)
+        ax2.set_xlabel("Checkpoint Epoch")
+        ax2.set_ylabel("Std of Episode Tags")
+        ax2.set_title("Stability / Variance by Role")
+        ax2.grid(True, axis="y", alpha=0.3)
+        ax2.legend(fontsize=8)
+
+        fig.tight_layout()
+        fig.savefig(os.path.join(plots_dir, "role_diagnostics.png"), dpi=150)
+        plt.close(fig)
+        print(f"  Saved: {plots_dir}/role_diagnostics.png")
+
     # --- Trajectory + heatmap per epoch ---
     traj_dir = os.path.join(save_dir, "trajectories")
     if not os.path.exists(traj_dir):
@@ -839,6 +997,21 @@ def main():
                         help="Output directory (default: experiments/<algo>)")
     parser.add_argument("--eval_episodes", type=int, default=EVAL_EPISODES,
                         help=f"Episodes per eval (default: {EVAL_EPISODES})")
+    parser.add_argument("--eval-seed", type=int, default=12345,
+                        help="Fixed random seed used during evaluation "
+                             "(default: 12345)")
+    parser.add_argument("--train-seed", type=int, default=None,
+                        help="Random seed used before training starts "
+                             "(default: unset)")
+    parser.add_argument("--steps-per-round", type=int, default=STEPS_PER_ROUND,
+                        help=f"Training steps per round (default: "
+                             f"{STEPS_PER_ROUND})")
+    parser.add_argument("--eval-steps", type=int, default=EVAL_STEPS,
+                        help=f"Evaluation steps per episode (default: "
+                             f"{EVAL_STEPS})")
+    parser.add_argument("--log-interval", type=int, default=LOG_INTERVAL,
+                        help=f"Training progress print interval "
+                             f"(default: {LOG_INTERVAL})")
     parser.add_argument("--sims", type=int, default=PARALLEL_SIMS,
                         help=f"Parallel sims for training (default: "
                              f"{PARALLEL_SIMS})")
@@ -862,6 +1035,9 @@ def main():
     if args.display and screen is not None:
         display_mgr = DisplayManager(screen, clock)
 
+    if args.train_seed is not None:
+        set_global_seed(args.train_seed)
+
     # Phase 1: Train
     training_log = None
     if not args.eval_only:
@@ -869,6 +1045,8 @@ def main():
             algo_class, algo_name, args.epochs, save_dir,
             display_mgr, args.sims,
             trace_decimation=args.trace_decimation,
+            steps_per_round=args.steps_per_round,
+            log_interval=args.log_interval,
         )
     else:
         log_path = os.path.join(save_dir, "training_log.json")
@@ -879,13 +1057,15 @@ def main():
     # Phase 2: Evaluate (both models loaded)
     eval_metrics = run_evaluations(
         algo_class, algo_name, args.epochs, save_dir,
-        display_mgr, args.eval_episodes,
+        display_mgr, args.eval_episodes, args.eval_seed,
+        eval_steps=args.eval_steps,
     )
 
     # Phase 2b: Isolated role evaluation
     role_metrics = run_role_evaluations(
         algo_class, algo_name, args.epochs, save_dir,
-        display_mgr, args.eval_episodes,
+        display_mgr, args.eval_episodes, args.eval_seed,
+        eval_steps=args.eval_steps,
     )
 
     # Phase 3: Plot

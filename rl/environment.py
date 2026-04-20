@@ -127,12 +127,14 @@ class TagEnvironment:
         }
 
     # Proximity reward parameters (Plan C — pure proximity, no delta)
-    _PROXIMITY_RADIUS = 100.0    # pixels, ~3 tiles — gradient active inside this
-    _PROXIMITY_COEF = 0.15       # peak reward at d=0
-    _TIME_PENALTY = 0.05         # tagger per non-tag frame
-    _SURVIVAL_BONUS = 0.05       # runner per non-tag frame
-    _TAG_REWARD = 50.0           # tagger on tag
-    _TAG_PENALTY = 50.0          # runner on being tagged
+    # Fixed best PPO ablation parameters (portable across devices)
+    _PROXIMITY_RADIUS = 140.0   # pixels, ~4.4 tiles — gradient active inside this
+    _PROXIMITY_COEF = 0.27      # peak reward at d=0
+    _TIME_PENALTY = 0.05        # tagger per non-tag frame
+    _SURVIVAL_BONUS = 0.10      # runner per non-tag frame
+    _TAG_REWARD = 50.0          # tagger on tag
+    _TAG_PENALTY = 80.0         # runner on being tagged
+    _PROXIMITY_AGG = "sum"      # sum or mean
 
     def compute_reward(self, entity: Entity, tag_event: dict | None) -> float:
         """Pure-proximity reward (Plan C).
@@ -172,6 +174,7 @@ class TagEnvironment:
             # Non-tag frame: constant time pressure + summed proximity bonus
             reward = -self._TIME_PENALTY
             r_inv = 1.0 / self._PROXIMITY_RADIUS
+            proximity_terms = []
             for other in self.entities:
                 if (other.entity_id == entity.entity_id
                         or other.is_tagger or other.is_eliminated):
@@ -179,7 +182,12 @@ class TagEnvironment:
                 d = entity.distance_to(other)
                 if d < self._PROXIMITY_RADIUS:
                     t = 1.0 - d * r_inv
-                    reward += self._PROXIMITY_COEF * t * t
+                    proximity_terms.append(self._PROXIMITY_COEF * t * t)
+            if proximity_terms:
+                if self._PROXIMITY_AGG == "mean":
+                    reward += sum(proximity_terms) / len(proximity_terms)
+                else:
+                    reward += sum(proximity_terms)
             return reward
 
         # Runner

@@ -44,7 +44,16 @@ from rl.base_algorithm import BaseRLAlgorithm
 # Hyperparameters
 # ---------------------------------------------------------------------------
 MAX_OTHER_AGENTS     = 6
-OBS_DIM              = 2 + 2 + 1 + 2 + 1 + 2 + 1 + 8 + MAX_OTHER_AGENTS * 4  # = 43
+TAGGER_OBS_DIM       = 2 + 2 + 2 + 1 + 8
+RUNNER_OBS_DIM       = 2 + 2 + 2 + 1 + 2 + 1 + 8
+UNIFIED_OBS_DIM      = 2 + 2 + 1 + 2 + 1 + 2 + 1 + 8 + MAX_OTHER_AGENTS * 4  # = 43
+_OBS_DIM_BY_ROLE = {
+    "tagger": TAGGER_OBS_DIM,
+    "runner": RUNNER_OBS_DIM,
+    "unified": UNIFIED_OBS_DIM,
+}
+# Backward-compatible alias for any external imports.
+OBS_DIM = UNIFIED_OBS_DIM
 HIDDEN_DIM           = 128
 LEARNING_RATE        = 1e-3
 GAMMA                = 0.99
@@ -130,11 +139,21 @@ class DQN(BaseRLAlgorithm):
         agent.learn(obs, action, reward, next_obs, done)
     """
 
-    def __init__(self):
+    def __init__(self, role: str = "unified"):
+        if role not in _OBS_DIM_BY_ROLE:
+            raise ValueError(
+                f"DQN role must be one of {list(_OBS_DIM_BY_ROLE)}, got {role!r}"
+            )
+        self.role = role
+        self.obs_dim = _OBS_DIM_BY_ROLE[role]
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.q_net      = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(self.device)
-        self.target_net = QNetwork(OBS_DIM, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(self.device)
+        self.q_net = QNetwork(self.obs_dim, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(
+            self.device
+        )
+        self.target_net = QNetwork(
+            self.obs_dim, self.ACTION_SPACE_SIZE, HIDDEN_DIM
+        ).to(self.device)
 
         # Sync target = online at init; freeze target gradients
         self.target_net.load_state_dict(self.q_net.state_dict())
@@ -154,38 +173,64 @@ class DQN(BaseRLAlgorithm):
     # Observation encoding (ego-centric, matches ppo.py)
     # ------------------------------------------------------------------
     def _obs_to_tensor(self, obs: dict) -> torch.Tensor:
-        features = []
+        if self.role == "tagger":
+            features = [
+                obs["self_pos"][0],
+                obs["self_pos"][1],
+                obs["self_vel"][0] / 3.0,
+                obs["self_vel"][1] / 3.0,
+                obs["nearest_runner_rel"][0],
+                obs["nearest_runner_rel"][1],
+                obs["nearest_runner_dist"],
+            ]
+            features.extend(obs["wall_rays"])
+        elif self.role == "runner":
+            features = [
+                obs["self_pos"][0],
+                obs["self_pos"][1],
+                obs["self_vel"][0] / 3.0,
+                obs["self_vel"][1] / 3.0,
+                obs["tagger_rel"][0],
+                obs["tagger_rel"][1],
+                obs["tagger_dist"],
+                obs["nearest_runner_rel"][0],
+                obs["nearest_runner_rel"][1],
+                obs["nearest_runner_dist"],
+            ]
+            features.extend(obs["wall_rays"])
+        else:
+            features = []
 
-        # Self position (2)
-        features.extend(obs["self_pos"])
+            # Self position (2)
+            features.extend(obs["self_pos"])
 
-        # Self velocity (2)
-        features.append(obs["self_vel"][0] / 3.0)
-        features.append(obs["self_vel"][1] / 3.0)
+            # Self velocity (2)
+            features.append(obs["self_vel"][0] / 3.0)
+            features.append(obs["self_vel"][1] / 3.0)
 
-        # Is tagger (1)
-        features.append(1.0 if obs["is_tagger"] else 0.0)
+            # Is tagger (1)
+            features.append(1.0 if obs["is_tagger"] else 0.0)
 
-        # Relative tagger direction + distance (3)
-        features.extend(obs["tagger_rel"])
-        features.append(obs["tagger_dist"])
+            # Relative tagger direction + distance (3)
+            features.extend(obs["tagger_rel"])
+            features.append(obs["tagger_dist"])
 
-        # Relative nearest runner direction + distance (3)
-        features.extend(obs["nearest_runner_rel"])
-        features.append(obs["nearest_runner_dist"])
+            # Relative nearest runner direction + distance (3)
+            features.extend(obs["nearest_runner_rel"])
+            features.append(obs["nearest_runner_dist"])
 
-        # Wall raycasts in 8 directions (8)
-        features.extend(obs["wall_rays"])
+            # Wall raycasts in 8 directions (8)
+            features.extend(obs["wall_rays"])
 
-        # Other agents sorted by distance (MAX_OTHER_AGENTS * 4)
-        other = obs.get("other_agents", [])
-        for i in range(MAX_OTHER_AGENTS):
-            if i < len(other):
-                features.extend(other[i]["rel_pos"])
-                features.append(other[i]["distance"])
-                features.append(1.0 if other[i]["is_tagger"] else 0.0)
-            else:
-                features.extend([0.0, 0.0, 0.0, 0.0])
+            # Other agents sorted by distance (MAX_OTHER_AGENTS * 4)
+            other = obs.get("other_agents", [])
+            for i in range(MAX_OTHER_AGENTS):
+                if i < len(other):
+                    features.extend(other[i]["rel_pos"])
+                    features.append(other[i]["distance"])
+                    features.append(1.0 if other[i]["is_tagger"] else 0.0)
+                else:
+                    features.extend([0.0, 0.0, 0.0, 0.0])
 
         return torch.tensor(features, dtype=torch.float32).to(self.device)
 
