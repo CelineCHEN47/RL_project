@@ -1,0 +1,42 @@
+[
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_10.pt",
+    "num_episodes": 20,
+    "mean_tags": 0.4,
+    "std_tags": 0.7348469228349536,
+    "min_tags": 0,
+    "max_tags": 3,
+    "total_tags": 8,
+    "epoch": 10
+  },
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_50.pt",
+    "num_episodes": 20,
+    "mean_tags": 0.85,
+    "std_tags": 1.194780314534852,
+    "min_tags": 0,
+    "max_tags": 4,
+    "total_tags": 17,
+    "epoch": 50
+  },
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_100.pt",
+    "num_episodes": 20,
+    "mean_tags": 0.85,
+    "std_tags": 0.9096702699330126,
+    "min_tags": 0,
+    "max_tags": 3,
+    "total_tags": 17,
+    "epoch": 100
+  },
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_best.pt",
+    "num_episodes": 20,
+    "mean_tags": 1.8,
+    "std_tags": 2.293468988235943,
+    "min_tags": 0,
+    "max_tags": 10,
+    "total_tags": 36,
+    "epoch": "best"
+  }
+]

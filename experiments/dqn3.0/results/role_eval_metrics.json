@@ -1,0 +1,78 @@
+[
+  {
+    "epoch": 10,
+    "tagger": {
+      "role": "tagger",
+      "epoch": 10,
+      "num_episodes": 20,
+      "mean_tags": 1.65,
+      "std_tags": 0.9096702699330126,
+      "mean_steps_between_tags": 917.9916666666668
+    },
+    "runner": {
+      "role": "runner",
+      "epoch": 10,
+      "num_episodes": 20,
+      "mean_tags": 0.4,
+      "std_tags": 0.7348469228349536,
+      "mean_steps_between_tags": 1665.6166666666663
+    }
+  },
+  {
+    "epoch": 50,
+    "tagger": {
+      "role": "tagger",
+      "epoch": 50,
+      "num_episodes": 20,
+      "mean_tags": 3.3,
+      "std_tags": 2.0760539492026693,
+      "mean_steps_between_tags": 562.979642857143
+    },
+    "runner": {
+      "role": "runner",
+      "epoch": 50,
+      "num_episodes": 20,
+      "mean_tags": 0.05,
+      "std_tags": 0.21794494717703364,
+      "mean_steps_between_tags": 1994.6
+    }
+  },
+  {
+    "epoch": 100,
+    "tagger": {
+      "role": "tagger",
+      "epoch": 100,
+      "num_episodes": 20,
+      "mean_tags": 4.55,
+      "std_tags": 2.5194245374688244,
+      "mean_steps_between_tags": 345.15126984126994
+    },
+    "runner": {
+      "role": "runner",
+      "epoch": 100,
+      "num_episodes": 20,
+      "mean_tags": 0.05,
+      "std_tags": 0.21794494717703367,
+      "mean_steps_between_tags": 1920.15
+    }
+  },
+  {
+    "epoch": "best",
+    "tagger": {
+      "role": "tagger",
+      "epoch": "best",
+      "num_episodes": 20,
+      "mean_tags": 1.65,
+      "std_tags": 0.9096702699330126,
+      "mean_steps_between_tags": 917.9916666666668
+    },
+    "runner": {
+      "role": "runner",
+      "epoch": "best",
+      "num_episodes": 20,
+      "mean_tags": 1.8,
+      "std_tags": 2.293468988235943,
+      "mean_steps_between_tags": 1117.8158333333333
+    }
+  }
+]
