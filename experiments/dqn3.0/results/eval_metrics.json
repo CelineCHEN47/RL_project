@@ -2,41 +2,71 @@
   {
     "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_10.pt",
     "num_episodes": 20,
-    "mean_tags": 0.4,
-    "std_tags": 0.7348469228349536,
+    "mean_tags": 0.65,
+    "std_tags": 1.107925990308017,
     "min_tags": 0,
-    "max_tags": 3,
-    "total_tags": 8,
+    "max_tags": 4,
+    "total_tags": 13,
     "epoch": 10
   },
   {
     "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_50.pt",
     "num_episodes": 20,
-    "mean_tags": 0.85,
-    "std_tags": 1.194780314534852,
+    "mean_tags": 0.5,
+    "std_tags": 0.8660254037844386,
     "min_tags": 0,
-    "max_tags": 4,
-    "total_tags": 17,
+    "max_tags": 3,
+    "total_tags": 10,
     "epoch": 50
   },
   {
     "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_100.pt",
     "num_episodes": 20,
-    "mean_tags": 0.85,
-    "std_tags": 0.9096702699330126,
+    "mean_tags": 5.0,
+    "std_tags": 2.5298221281347035,
     "min_tags": 0,
-    "max_tags": 3,
-    "total_tags": 17,
+    "max_tags": 11,
+    "total_tags": 100,
     "epoch": 100
+  },
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_200.pt",
+    "num_episodes": 20,
+    "mean_tags": 2.4,
+    "std_tags": 2.3108440016582685,
+    "min_tags": 0,
+    "max_tags": 9,
+    "total_tags": 48,
+    "epoch": 200
+  },
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_500.pt",
+    "num_episodes": 20,
+    "mean_tags": 13.35,
+    "std_tags": 10.179759329178662,
+    "min_tags": 0,
+    "max_tags": 31,
+    "total_tags": 267,
+    "epoch": 500
+  },
+  {
+    "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_epoch_1000.pt",
+    "num_episodes": 20,
+    "mean_tags": 10.1,
+    "std_tags": 5.85576638878294,
+    "min_tags": 1,
+    "max_tags": 22,
+    "total_tags": 202,
+    "epoch": 1000
   },
   {
     "checkpoint": "experiments/dqn3.0\\checkpoints\\dqn_best.pt",
     "num_episodes": 20,
-    "mean_tags": 1.8,
-    "std_tags": 2.293468988235943,
-    "min_tags": 0,
-    "max_tags": 10,
-    "total_tags": 36,
+    "mean_tags": 10.7,
+    "std_tags": 6.157109711544858,
+    "min_tags": 2,
+    "max_tags": 21,
+    "total_tags": 214,
     "epoch": "best"
   }
 ]
