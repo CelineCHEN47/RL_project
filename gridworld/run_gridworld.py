@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train and visualize tabular RL agents in a simple tag gridworld.
+"""Train and visualize RL agents in a simple tag gridworld.
 
 Training pipeline (Option A — train one at a time):
   Phase 1: Train TAGGER vs random runner  (learns to chase)
@@ -13,17 +13,28 @@ Usage:
     # Use SARSA instead
     python -m gridworld.run_gridworld --algo sarsa
 
+    # Use PPO or DQN instead
+    python -m gridworld.run_gridworld --algo ppo
+    python -m gridworld.run_gridworld --algo dqn
+
     # More training episodes
     python -m gridworld.run_gridworld --episodes 20000
 
     # Skip training, just visualize saved models
     python -m gridworld.run_gridworld --watch-only
 
+    # Evaluate only (numeric metrics, no window)
+    python -m gridworld.run_gridworld --eval-only
+
     # Train only, no visualization
     python -m gridworld.run_gridworld --train-only
+
+    # Train only, headless (fast, no window)
+    python -m gridworld.run_gridworld --train-only --headless
 """
 
 import argparse
+import json
 import math
 import os
 import sys
@@ -32,6 +43,7 @@ import pygame
 
 from gridworld.env import TagGridWorld, GRID_SIZE, NUM_ACTIONS
 from gridworld.tabular_agent import QLearningAgent, SARSAAgent, RandomAgent
+from gridworld.deep_agents import GridPPOAgent, GridDQNAgent
 from gridworld.recorder import VideoRecorder
 from rendering.textures import generate_floor_texture, generate_wall_texture
 from rendering.sprites import generate_character_sprite, generate_tagger_aura_frame
@@ -45,6 +57,7 @@ CELL_SIZE = 60          # pixels per grid cell
 PANEL_WIDTH = 320       # side panel for stats
 FPS_WATCH = 6           # slow enough to follow during final demo
 SAVE_DIR = "gridworld/saved_models"
+RESULTS_DIR = "gridworld/results"
 
 # Colors (panel / text)
 BG          = (25, 25, 35)
@@ -82,11 +95,13 @@ class GridWorldRenderer:
         # Particles
         self.particles = ParticleSystem()
 
-        # Fonts
-        self.font_title = pygame.font.SysFont("Arial", 20, bold=True)
-        self.font = pygame.font.SysFont("Arial", 16)
-        self.font_small = pygame.font.SysFont("Arial", 13)
-        self.font_label = pygame.font.SysFont("Arial", 12, bold=True)
+        # Fonts (avoid SysFont to prevent Win32 font registry issues)
+        self.font_title = pygame.font.Font(None, 20)
+        self.font_title.set_bold(True)
+        self.font = pygame.font.Font(None, 16)
+        self.font_small = pygame.font.Font(None, 13)
+        self.font_label = pygame.font.Font(None, 12)
+        self.font_label.set_bold(True)
 
         # Pre-render shadow ellipse
         shadow_w = int(CELL_SIZE * 0.6)
@@ -374,7 +389,10 @@ def train_phase(screen, clock, renderer: GridWorldRenderer, env, learner,
             last_result = f"Timeout ({env.max_steps} steps)"
 
         total_reward += ep_reward
-        learner.decay_epsilon()
+        if hasattr(learner, "decay_epsilon"):
+            learner.decay_epsilon()
+        if hasattr(learner, "flush"):
+            learner.flush()
 
     return catches, timeouts
 
@@ -480,12 +498,128 @@ def watch_phase(screen, clock, renderer: GridWorldRenderer, env,
 
 
 # ======================================================================
+# Training without rendering (headless, fast)
+# ======================================================================
+def train_phase_headless(env, learner, opponent, role: str,
+                         num_episodes: int) -> tuple[int, int]:
+    """Train one role against a fixed opponent without rendering."""
+    catches = 0
+    timeouts = 0
+
+    for _ in range(num_episodes):
+        state = env.reset()
+
+        while not env.done:
+            if role == "tagger":
+                action = learner.select_action(state)
+            else:
+                action = opponent.select_action(state)
+
+            next_state, tagger_reward, done = env.step_tagger(action)
+
+            if role == "tagger":
+                learner.learn(state, action, tagger_reward, next_state, done)
+
+            state = next_state
+
+            if done:
+                break
+
+            if role == "runner":
+                action_r = learner.select_action(state)
+            else:
+                action_r = opponent.select_action(state)
+
+            next_state, runner_reward, done = env.step_runner(action_r)
+
+            if role == "runner":
+                if isinstance(learner, SARSAAgent):
+                    next_a = learner.select_action(next_state) if not done else 0
+                    learner.learn(state, action_r, runner_reward, next_state,
+                                  done, next_action=next_a)
+                else:
+                    learner.learn(state, action_r, runner_reward, next_state,
+                                  done)
+
+            state = next_state
+
+        if env.tagger_pos == env.runner_pos:
+            catches += 1
+        else:
+            timeouts += 1
+
+        if hasattr(learner, "decay_epsilon"):
+            learner.decay_epsilon()
+        if hasattr(learner, "flush"):
+            learner.flush()
+
+    return catches, timeouts
+
+
+# ======================================================================
+# Evaluation-only (numeric metrics, no rendering)
+# ======================================================================
+def eval_phase(env: TagGridWorld, tagger_agent, runner_agent,
+               num_episodes: int = 200) -> dict:
+    """Run headless evaluation and return aggregate metrics."""
+    catches = 0
+    timeouts = 0
+    total_steps = 0
+    tagger_reward_sum = 0.0
+    runner_reward_sum = 0.0
+
+    for _ in range(num_episodes):
+        state = env.reset()
+        ep_tagger_reward = 0.0
+        ep_runner_reward = 0.0
+
+        while not env.done:
+            t_action = tagger_agent.select_action(state)
+            state, t_reward, done = env.step_tagger(t_action)
+            ep_tagger_reward += t_reward
+
+            if done:
+                break
+
+            r_action = runner_agent.select_action(state)
+            state, r_reward, done = env.step_runner(r_action)
+            ep_runner_reward += r_reward
+
+        total_steps += env.steps
+        tagger_reward_sum += ep_tagger_reward
+        runner_reward_sum += ep_runner_reward
+
+        if env.tagger_pos == env.runner_pos:
+            catches += 1
+        else:
+            timeouts += 1
+
+    total = max(num_episodes, 1)
+    return {
+        "episodes": num_episodes,
+        "catches": catches,
+        "timeouts": timeouts,
+        "catch_rate": catches / total * 100.0,
+        "avg_steps": total_steps / total,
+        "avg_tagger_reward": tagger_reward_sum / total,
+        "avg_runner_reward": runner_reward_sum / total,
+    }
+
+
+def save_metrics(path: str, payload: dict) -> None:
+    """Save metrics as a JSON file."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
+# ======================================================================
 # Main
 # ======================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="Train & visualize tabular RL in tag gridworld")
-    parser.add_argument("--algo", choices=["qlearning", "sarsa"],
+        description="Train & visualize RL in tag gridworld")
+    parser.add_argument("--algo", choices=["qlearning", "sarsa", "ppo", "dqn"],
                         default="qlearning", help="Algorithm (default: qlearning)")
     parser.add_argument("--episodes", type=int, default=5000,
                         help="Training episodes per phase (default: 5000)")
@@ -493,37 +627,84 @@ def main():
                         help="Skip training, load saved models and watch")
     parser.add_argument("--train-only", action="store_true",
                         help="Train only, no watch phase")
+    parser.add_argument("--headless", action="store_true",
+                        help="Train without rendering (fast)")
+    parser.add_argument("--eval-only", action="store_true",
+                        help="Skip training and rendering, run numeric eval")
     parser.add_argument("--watch-episodes", type=int, default=20,
                         help="Episodes to watch (default: 20)")
+    parser.add_argument("--eval-episodes", type=int, default=200,
+                        help="Episodes for eval-only (default: 200)")
+    parser.add_argument("--results-dir", default=RESULTS_DIR,
+                        help="Directory for saving metrics JSON")
     parser.add_argument("--record", action="store_true",
                         help="Record training & watch phases to MP4 videos")
     args = parser.parse_args()
-
-    # Init pygame
-    pygame.init()
-    grid_px = GRID_SIZE * CELL_SIZE + 40
-    screen_w = grid_px + PANEL_WIDTH
-    screen_h = GRID_SIZE * CELL_SIZE + 30
-    screen = pygame.display.set_mode((screen_w, screen_h))
-    pygame.display.set_caption(f"Tag Gridworld — {args.algo.upper()}")
-    clock = pygame.time.Clock()
 
     algo_name = args.algo.upper()
     if algo_name == "QLEARNING":
         algo_name = "Q-Learning"
 
-    renderer = GridWorldRenderer()
-
     def make_agent():
         if args.algo == "sarsa":
             return SARSAAgent()
+        if args.algo == "ppo":
+            return GridPPOAgent(grid_size=GRID_SIZE, action_dim=NUM_ACTIONS)
+        if args.algo == "dqn":
+            return GridDQNAgent(grid_size=GRID_SIZE, action_dim=NUM_ACTIONS)
         return QLearningAgent()
 
-    tagger_path = os.path.join(SAVE_DIR, f"{args.algo}_tagger.pkl")
-    runner_path = os.path.join(SAVE_DIR, f"{args.algo}_runner.pkl")
+    def set_watch_mode(agent):
+        if hasattr(agent, "set_eval"):
+            agent.set_eval(True)
+        if hasattr(agent, "epsilon"):
+            agent.epsilon = 0.0
+
+    model_ext = ".pt" if args.algo in {"ppo", "dqn"} else ".pkl"
+    tagger_path = os.path.join(SAVE_DIR, f"{args.algo}_tagger{model_ext}")
+    runner_path = os.path.join(SAVE_DIR, f"{args.algo}_runner{model_ext}")
+    results_dir = args.results_dir
 
     env = TagGridWorld()
     video_dir = os.path.join("gridworld", "videos")
+
+    if args.eval_only:
+        tagger_agent = make_agent()
+        runner_agent = make_agent()
+        tagger_agent.load(tagger_path)
+        runner_agent.load(runner_path)
+        set_watch_mode(tagger_agent)
+        set_watch_mode(runner_agent)
+
+        metrics = eval_phase(env, tagger_agent, runner_agent,
+                             num_episodes=args.eval_episodes)
+        save_metrics(
+            os.path.join(results_dir, f"{args.algo}_eval_metrics.json"),
+            metrics,
+        )
+        print("\n=== EVAL RESULT ===")
+        print(f"Episodes:        {metrics['episodes']}")
+        print(f"Catches:         {metrics['catches']}")
+        print(f"Timeouts:        {metrics['timeouts']}")
+        print(f"Catch rate:      {metrics['catch_rate']:.1f}%")
+        print(f"Avg steps:       {metrics['avg_steps']:.1f}")
+        print(f"Avg tagger R:    {metrics['avg_tagger_reward']:.2f}")
+        print(f"Avg runner R:    {metrics['avg_runner_reward']:.2f}")
+        return
+
+    # Init pygame (train/watch paths). Skip when headless train-only.
+    screen = None
+    clock = None
+    renderer = None
+    if not (args.train_only and args.headless):
+        pygame.init()
+        grid_px = GRID_SIZE * CELL_SIZE + 40
+        screen_w = grid_px + PANEL_WIDTH
+        screen_h = GRID_SIZE * CELL_SIZE + 30
+        screen = pygame.display.set_mode((screen_w, screen_h))
+        pygame.display.set_caption(f"Tag Gridworld — {args.algo.upper()}")
+        clock = pygame.time.Clock()
+        renderer = GridWorldRenderer()
 
     if not args.watch_only:
         # ---- Phase 1: Train tagger vs random runner ----
@@ -544,21 +725,43 @@ def main():
                 os.path.join(video_dir, f"{args.algo}_phase1_tagger_training.mp4"),
                 screen, fps=30, sample_every=5)
 
-        catches, timeouts = train_phase(
-            screen, clock, renderer, env, tagger_agent, random_runner,
-            role="tagger", algo_name=algo_name,
-            num_episodes=args.episodes,
-            phase_label="Phase 1: Train TAGGER vs random",
-            recorder=rec1,
-        )
+        if args.train_only and args.headless:
+            catches, timeouts = train_phase_headless(
+                env, tagger_agent, random_runner, role="tagger",
+                num_episodes=args.episodes,
+            )
+        else:
+            catches, timeouts = train_phase(
+                screen, clock, renderer, env, tagger_agent, random_runner,
+                role="tagger", algo_name=algo_name,
+                num_episodes=args.episodes,
+                phase_label="Phase 1: Train TAGGER vs random",
+                recorder=rec1,
+            )
         if rec1:
             rec1.finish()
 
         tagger_agent.save(tagger_path)
         total = catches + timeouts
+        save_metrics(
+            os.path.join(results_dir, f"{args.algo}_phase1_metrics.json"),
+            {
+                "episodes": args.episodes,
+                "catches": catches,
+                "timeouts": timeouts,
+                "catch_rate": catches / max(total, 1) * 100.0,
+            },
+        )
         print(f"  Tagger trained: {catches} catches, {timeouts} timeouts "
               f"({catches / max(total, 1) * 100:.1f}% catch rate)")
-        print(f"  Q-table size: {len(tagger_agent.q_table):,}")
+        if hasattr(tagger_agent, "q_table"):
+            print(f"  Q-table size: {len(tagger_agent.q_table):,}")
+        elif hasattr(tagger_agent, "network"):
+            params = sum(p.numel() for p in tagger_agent.network.parameters())
+            print(f"  Params: {params:,}")
+        elif hasattr(tagger_agent, "q_net"):
+            params = sum(p.numel() for p in tagger_agent.q_net.parameters())
+            print(f"  Params: {params:,}")
         print(f"  Saved: {tagger_path}")
 
         # ---- Phase 2: Train runner vs trained tagger ----
@@ -569,7 +772,7 @@ def main():
         print(f"{'='*50}")
 
         runner_agent = make_agent()
-        tagger_agent.epsilon = 0.0
+        set_watch_mode(tagger_agent)
 
         rec2 = None
         if args.record:
@@ -577,30 +780,52 @@ def main():
                 os.path.join(video_dir, f"{args.algo}_phase2_runner_training.mp4"),
                 screen, fps=30, sample_every=5)
 
-        catches, timeouts = train_phase(
-            screen, clock, renderer, env, runner_agent, tagger_agent,
-            role="runner", algo_name=algo_name,
-            num_episodes=args.episodes,
-            phase_label="Phase 2: Train RUNNER vs trained tagger",
-            recorder=rec2,
-        )
+        if args.train_only and args.headless:
+            catches, timeouts = train_phase_headless(
+                env, runner_agent, tagger_agent, role="runner",
+                num_episodes=args.episodes,
+            )
+        else:
+            catches, timeouts = train_phase(
+                screen, clock, renderer, env, runner_agent, tagger_agent,
+                role="runner", algo_name=algo_name,
+                num_episodes=args.episodes,
+                phase_label="Phase 2: Train RUNNER vs trained tagger",
+                recorder=rec2,
+            )
         if rec2:
             rec2.finish()
 
         runner_agent.save(runner_path)
         total = catches + timeouts
         survival_rate = timeouts / max(total, 1) * 100
+        save_metrics(
+            os.path.join(results_dir, f"{args.algo}_phase2_metrics.json"),
+            {
+                "episodes": args.episodes,
+                "catches": catches,
+                "timeouts": timeouts,
+                "survival_rate": survival_rate,
+            },
+        )
         print(f"  Runner trained: {catches} catches, {timeouts} survivals "
               f"({survival_rate:.1f}% survival rate)")
-        print(f"  Q-table size: {len(runner_agent.q_table):,}")
+        if hasattr(runner_agent, "q_table"):
+            print(f"  Q-table size: {len(runner_agent.q_table):,}")
+        elif hasattr(runner_agent, "network"):
+            params = sum(p.numel() for p in runner_agent.network.parameters())
+            print(f"  Params: {params:,}")
+        elif hasattr(runner_agent, "q_net"):
+            params = sum(p.numel() for p in runner_agent.q_net.parameters())
+            print(f"  Params: {params:,}")
         print(f"  Saved: {runner_path}")
     else:
         tagger_agent = make_agent()
         runner_agent = make_agent()
         tagger_agent.load(tagger_path)
         runner_agent.load(runner_path)
-        tagger_agent.epsilon = 0.0
-        runner_agent.epsilon = 0.0
+        set_watch_mode(tagger_agent)
+        set_watch_mode(runner_agent)
         print(f"  Loaded tagger: {tagger_path}")
         print(f"  Loaded runner: {runner_path}")
 
@@ -611,8 +836,8 @@ def main():
         print(f"  Episodes: {args.watch_episodes}")
         print(f"{'='*50}")
 
-        tagger_agent.epsilon = 0.0
-        runner_agent.epsilon = 0.0
+        set_watch_mode(tagger_agent)
+        set_watch_mode(runner_agent)
 
         rec3 = None
         if args.record:
@@ -626,7 +851,8 @@ def main():
         if rec3:
             rec3.finish()
 
-    pygame.quit()
+    if not (args.train_only and args.headless):
+        pygame.quit()
     print("\nDone.")
 
 

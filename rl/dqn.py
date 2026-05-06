@@ -147,20 +147,7 @@ class DQN(BaseRLAlgorithm):
         self.role = role
         self.obs_dim = _OBS_DIM_BY_ROLE[role]
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        self.q_net = QNetwork(self.obs_dim, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(
-            self.device
-        )
-        self.target_net = QNetwork(
-            self.obs_dim, self.ACTION_SPACE_SIZE, HIDDEN_DIM
-        ).to(self.device)
-
-        # Sync target = online at init; freeze target gradients
-        self.target_net.load_state_dict(self.q_net.state_dict())
-        for p in self.target_net.parameters():
-            p.requires_grad_(False)
-
-        self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=LEARNING_RATE)
+        self._init_networks(self.obs_dim)
         self.replay_buffer = ReplayBuffer(REPLAY_BUFFER_SIZE)
 
         self.epsilon     = EPSILON_START
@@ -168,6 +155,20 @@ class DQN(BaseRLAlgorithm):
         self.last_loss   = 0.0
 
         self._last_state: torch.Tensor | None = None
+
+    def _init_networks(self, obs_dim: int):
+        """(Re)build Q networks + optimizer for a given observation size."""
+        self.obs_dim = int(obs_dim)
+        self.q_net = QNetwork(self.obs_dim, self.ACTION_SPACE_SIZE, HIDDEN_DIM).to(
+            self.device
+        )
+        self.target_net = QNetwork(
+            self.obs_dim, self.ACTION_SPACE_SIZE, HIDDEN_DIM
+        ).to(self.device)
+        self.target_net.load_state_dict(self.q_net.state_dict())
+        for p in self.target_net.parameters():
+            p.requires_grad_(False)
+        self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=LEARNING_RATE)
 
     # ------------------------------------------------------------------
     # Observation encoding (ego-centric, matches ppo.py)
@@ -338,6 +339,12 @@ class DQN(BaseRLAlgorithm):
         if not os.path.exists(path):
             return
         ckpt = torch.load(path, map_location=self.device)
+        ckpt_obs_dim = ckpt["q_net"]["net.0.weight"].shape[1]
+        if ckpt_obs_dim != self.obs_dim:
+            # Backward compatibility: old checkpoints used unified 43-dim inputs.
+            self._init_networks(ckpt_obs_dim)
+            if ckpt_obs_dim == UNIFIED_OBS_DIM:
+                self.role = "unified"
         self.q_net.load_state_dict(ckpt["q_net"])
         self.target_net.load_state_dict(ckpt["target_net"])
         self.optimizer.load_state_dict(ckpt["optimizer"])
