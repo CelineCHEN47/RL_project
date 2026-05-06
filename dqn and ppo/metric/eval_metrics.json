@@ -1,0 +1,72 @@
+[
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_epoch_10.pt",
+    "num_episodes": 20,
+    "mean_tags": 1.45,
+    "std_tags": 2.108909670896314,
+    "min_tags": 0,
+    "max_tags": 9,
+    "total_tags": 29,
+    "epoch": 10
+  },
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_epoch_50.pt",
+    "num_episodes": 20,
+    "mean_tags": 1.9,
+    "std_tags": 1.9209372712298547,
+    "min_tags": 0,
+    "max_tags": 7,
+    "total_tags": 38,
+    "epoch": 50
+  },
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_epoch_100.pt",
+    "num_episodes": 20,
+    "mean_tags": 2.35,
+    "std_tags": 2.1742814905158903,
+    "min_tags": 0,
+    "max_tags": 8,
+    "total_tags": 47,
+    "epoch": 100
+  },
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_epoch_200.pt",
+    "num_episodes": 20,
+    "mean_tags": 3.4,
+    "std_tags": 1.5620499351813306,
+    "min_tags": 1,
+    "max_tags": 8,
+    "total_tags": 68,
+    "epoch": 200
+  },
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_epoch_500.pt",
+    "num_episodes": 20,
+    "mean_tags": 16.1,
+    "std_tags": 7.475961476626268,
+    "min_tags": 4,
+    "max_tags": 29,
+    "total_tags": 322,
+    "epoch": 500
+  },
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_epoch_1000.pt",
+    "num_episodes": 20,
+    "mean_tags": 30.3,
+    "std_tags": 5.4230987451825,
+    "min_tags": 23,
+    "max_tags": 42,
+    "total_tags": 606,
+    "epoch": 1000
+  },
+  {
+    "checkpoint": "experiments/ppo_1000\\checkpoints\\ppo_best.pt",
+    "num_episodes": 20,
+    "mean_tags": 43.25,
+    "std_tags": 13.076218872441682,
+    "min_tags": 6,
+    "max_tags": 58,
+    "total_tags": 865,
+    "epoch": "best"
+  }
+]
