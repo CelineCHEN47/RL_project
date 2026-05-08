@@ -326,3 +326,8 @@ Agents only decide every `DECISION_INTERVAL` frames (default: 4 in `config.py`).
 
 For neural network algorithms (PPO, DQN), you'll also need :
 - PyTorch (`pip install torch`) or TensorFlow
+
+## Visualization
+
+![PPO Tagger Demo]
+(experiments\visualization\dqn_runner10.gif)
