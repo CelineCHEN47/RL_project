@@ -1,0 +1,9 @@
+{
+  "episodes": 200,
+  "catches": 165,
+  "timeouts": 35,
+  "catch_rate": 82.5,
+  "avg_steps": 41.415,
+  "avg_tagger_reward": 4.044999999999995,
+  "avg_runner_reward": 3.7712500000000038
+}

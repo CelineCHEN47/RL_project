@@ -1,0 +1,14 @@
+{
+  "Q-Learning": {
+    "phase1_catch_rate": 100.0,
+    "phase2_survival_rate": 38.14,
+    "phase3_catch_rate": 62.5,
+    "phase3_avg_steps": 81.3
+  },
+  "SARSA": {
+    "phase1_catch_rate": 100.0,
+    "phase2_survival_rate": 89.4,
+    "phase3_catch_rate": 9.0,
+    "phase3_avg_steps": 182.7
+  }
+}
