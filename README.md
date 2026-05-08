@@ -329,5 +329,22 @@ For neural network algorithms (PPO, DQN), you'll also need :
 
 ## Visualization
 
-![PPO Tagger Demo]
-(experiments\visualization\dqn_runner10.gif)
+### 1. Performance of Runner
+We evaluate the Runner trained for different epochs against a random Tagger.（PPO algorithm)
+
+| Epochs | Visualization |
+| :---: | :---: |
+| **10 Epochs** | <img src="experiments/visualization/ppo_runner10.gif" width="250" /> |
+| **50 Epochs** | <img src="experiments/visualization/ppo_runner50.gif" width="250" /> |
+| **100 Epochs** | <img src="experiments/visualization/ppo_runner100.gif" width="250" /> |
+For the runner visualization, we can see the performance before 50 epoch is bad, they are easy to get caught, after 50 epoch 100 become better, they eventually learn the strategy to stay distance from tagger.
+
+### 2. Performance of Tagger
+We evaluate the Tagger trained for different epochs against a random Runner.(PPO algorithm)
+
+| Epochs | Visualization |
+| :---: | :---: |
+| **10 Epochs** | <img src="experiments/visualization/ppo_tagger10.gif" width="250" /> |
+| **50 Epochs** | <img src="experiments/visualization/ppo_tagger50.gif" width="250" /> |
+| **100 Epochs** | <img src="experiments/visualization/ppo_tagger100.gif" width="250" /> |
+For the tagger visualization, the performance of ppo in the previous 50 epoches is not good, it act similar to wondering, but in epoch 100, it learns to approaching the runners, we can see this performance, it indeed trying to catch the runner. 
